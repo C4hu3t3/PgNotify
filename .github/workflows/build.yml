@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      contents: write # create the GitHub Release and attach the .nupkg files
       packages: write
       id-token: write # OIDC token for NuGet.org Trusted Publishing
     steps:
@@ -116,3 +116,13 @@ jobs:
           --source https://api.nuget.org/v3/index.json
           --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
           --skip-duplicate
+
+      # gh is preinstalled on GitHub-hosted runners, so this needs no extra action/dependency.
+      # --generate-notes drafts release notes from the commits/PRs since the previous tag.
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" artifacts/nupkg/*.nupkg \
+            --title "${GITHUB_REF_NAME}" \
+            --generate-notes
