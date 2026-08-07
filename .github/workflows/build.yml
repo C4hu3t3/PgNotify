@@ -119,10 +119,13 @@ jobs:
 
       # gh is preinstalled on GitHub-hosted runners, so this needs no extra action/dependency.
       # --generate-notes drafts release notes from the commits/PRs since the previous tag.
+      # --repo is required because this job has no actions/checkout step, so there's no local
+      # git repository for gh to infer the target repo from.
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release create "${GITHUB_REF_NAME}" artifacts/nupkg/*.nupkg \
+            --repo "${{ github.repository }}" \
             --title "${GITHUB_REF_NAME}" \
             --generate-notes
