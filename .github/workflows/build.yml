@@ -69,7 +69,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish to GitHub Packages
+    name: Publish packages
     needs: build-test-pack
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
@@ -77,6 +77,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # OIDC token for NuGet.org Trusted Publishing
     steps:
       - name: Download NuGet packages
         uses: actions/download-artifact@v4
@@ -97,4 +98,21 @@ jobs:
           dotnet nuget push "artifacts/nupkg/*.nupkg"
           --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
           --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate
+
+      # Trusted Publishing: no long-lived secret to store or rotate. The OIDC token above
+      # (id-token: write) is exchanged for a NuGet API key that's valid for 1 hour, scoped to
+      # this one push - see docs.microsoft.com/nuget/nuget-org/trusted-publishing. The policy
+      # matching this repo/workflow must be configured on nuget.org first.
+      - name: NuGet login (OIDC -> temp API key)
+        uses: NuGet/login@v1
+        id: nuget_login
+        with:
+          user: C4hu3t3
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "artifacts/nupkg/*.nupkg"
+          --source https://api.nuget.org/v3/index.json
+          --api-key ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
           --skip-duplicate
