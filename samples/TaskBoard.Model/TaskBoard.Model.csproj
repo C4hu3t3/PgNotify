@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace, same as every other sample
+         project (not load-bearing here the way it is for TaskBoard.WebApi's dotnet-ef tooling,
+         just kept for consistency). -->
+    <RootNamespace>TaskBoard.Model</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PgNotify.Core alone, for [NotifyChanges]: no EF Core, no Npgsql, no runtime. What
+         TaskBoard.WebApi and TaskBoard.Watcher share is the entity, and nothing else - the watcher
+         keys its handlers on the POCO itself. -->
+    <ProjectReference Include="..\..\src\PgNotify.Core\PgNotify.Core.csproj" />
+  </ItemGroup>
+
+</Project>

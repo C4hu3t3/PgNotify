@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: http_caching_sample
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # 5433, not 5432: this sample is meant to be runnable next to CacheInvalidation.WebApi's
+    # container (and next to a PostgreSQL you may already have on the default port).
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- EF1001 flags "internal EF Core API" by namespace, and this repo's own internals live in
+         ...PgNotify.Internal, which matches that heuristic. The types these tests reach into
+         (NotificationChannelMap, NotificationRuntimeState) belong to PgNotify.Runtime, which
+         has no EF Core dependency at all. -->
+    <NoWarn>$(NoWarn);EF1001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.collector" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="FluentAssertions" />
+    <PackageReference Include="Microsoft.Extensions.Logging" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- PgNotify.Migrations, for UseNpgsqlNotifications() and UseNpgsql(): the bridge itself
+         must build against neither, which is what its own csproj asserts. -->
+    <ProjectReference Include="..\..\src\PgNotify.Migrations\PgNotify.Migrations.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime.EFCore\PgNotify.Runtime.EFCore.csproj" />
+  </ItemGroup>
+
+</Project>

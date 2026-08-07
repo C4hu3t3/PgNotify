@@ -1,0 +1,100 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*.*.*']
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  build-test-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      # Excludes PgNotify.IntegrationTests - run separately below so a failure there is
+      # attributed clearly instead of being buried in one big test step.
+      - name: Run fast tests
+        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName!~IntegrationTests"
+
+      # ubuntu-latest runners have Docker pre-installed, so the Testcontainers-based suite (real
+      # PostgreSQL via postgres:16-alpine) works without extra setup - see CLAUDE.md.
+      - name: Run Docker integration tests
+        run: dotnet test tests/PgNotify.IntegrationTests/PgNotify.IntegrationTests.csproj --no-build --configuration Release
+
+      # Tag pushes (v1.2.3) get that exact version; every other build gets a clearly-non-release
+      # version so it's obvious these packages were never meant to be consumed.
+      - name: Determine package version
+        id: version
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-ci.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Pack
+        run: dotnet pack --no-build --configuration Release --output ./artifacts/nupkg -p:PackageVersion=${{ steps.version.outputs.version }}
+
+      - name: Upload NuGet packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/nupkg/*.nupkg
+          if-no-files-found: error
+
+  publish:
+    name: Publish to GitHub Packages
+    needs: build-test-pack
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Download NuGet packages
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget-packages
+          path: artifacts/nupkg
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # GITHUB_TOKEN can publish to this repo's own (private) GitHub Packages NuGet registry -
+      # no extra secrets to manage. --skip-duplicate makes re-running the workflow for the same
+      # tag a no-op instead of a failure.
+      - name: Push to GitHub Packages
+        run: >
+          dotnet nuget push "artifacts/nupkg/*.nupkg"
+          --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json"
+          --api-key "${{ secrets.GITHUB_TOKEN }}"
+          --skip-duplicate

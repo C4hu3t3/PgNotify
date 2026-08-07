@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>EF Core migrations integration that turns PostgreSQL notification configuration into deterministic, idempotent trigger/trigger-function DDL via a custom IMigrationsSqlGenerator.</Description>
+    <PackageId>PgNotify.Migrations</PackageId>
+    <!-- Subclassing Npgsql/EF Core's provider "Internal" namespace types (NpgsqlAnnotationProvider,
+         MigrationsAnnotationProviderDependencies, INpgsqlSingletonOptions, ...) is the only available
+         extensibility point for this subsystem, and is the same technique Npgsql itself uses
+         internally. EF1001 is expected and accepted here, not suppressed elsewhere in the solution. -->
+    <NoWarn>$(NoWarn);EF1001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.EFCore\PgNotify.EFCore.csproj" />
+  </ItemGroup>
+
+</Project>

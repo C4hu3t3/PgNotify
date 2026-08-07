@@ -1,0 +1,45 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>PgNotify</RootNamespace>
+    <WarningsAsErrors>Nullable</WarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Authors>PgNotify contributors</Authors>
+    <Product>PgNotify</Product>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/C4hu3t3/PgNotify</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/C4hu3t3/PgNotify</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <IsPackable>false</IsPackable>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+  </PropertyGroup>
+
+  <!-- src/ projects are packable library projects; tests and samples opt back out below. -->
+  <PropertyGroup Condition="$(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)src$([System.IO.Path]::DirectorySeparatorChar)'))">
+    <IsPackable>true</IsPackable>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>efcore;entity-framework-core;postgresql;postgres;npgsql;listen-notify;notifications;realtime;pubsub;cache-invalidation</PackageTags>
+  </PropertyGroup>
+
+  <!-- Every packable project embeds the repo's root README as its NuGet readme — same source
+       everyone landing on the package page from the repo already reads, not a per-package
+       duplicate to keep in sync. $(MSBuildThisFileDirectory) is this props file's own directory
+       (the repo root) regardless of which project imports it. -->
+  <ItemGroup Condition="'$(IsPackable)' == 'true'">
+    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <!-- CS1591 (missing XML doc on a public member) only matters for a packable library's public API
+       surface; suppress it outside src/ so xUnit's public test classes/methods, sample Program.cs
+       top-level types, and benchmark classes don't generate warning noise. -->
+  <PropertyGroup Condition="!$(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)src$([System.IO.Path]::DirectorySeparatorChar)'))">
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+  </PropertyGroup>
+
+</Project>

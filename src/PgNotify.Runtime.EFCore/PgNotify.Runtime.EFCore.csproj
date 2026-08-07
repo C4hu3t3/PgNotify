@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Derives the runtime listener's channels — and its connection string — from the EF Core models of the DbContexts that opted in via UseNpgsqlNotifications(), so the listening side restates nothing the model already says. References EF Core Relational, never the Npgsql EF Core provider: a listener process should not have to carry the migrations stack to read a model.</Description>
+    <PackageId>PgNotify.Runtime.EFCore</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.EFCore\PgNotify.EFCore.csproj" />
+    <ProjectReference Include="..\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

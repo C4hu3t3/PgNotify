@@ -1,0 +1,34 @@
+<Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/PgNotify.Benchmarks/PgNotify.Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="samples/CacheInvalidation.WebApi/CacheInvalidation.WebApi.csproj" />
+    <Project Path="samples/HttpCaching.WebApi/HttpCaching.WebApi.csproj" />
+    <Project Path="samples/Orders.Model/Orders.Model.csproj" />
+    <Project Path="samples/Orders.Projector/Orders.Projector.csproj" />
+    <Project Path="samples/Orders.WebApi/Orders.WebApi.csproj" />
+    <Project Path="samples/TaskBoard.Model/TaskBoard.Model.csproj" />
+    <Project Path="samples/TaskBoard.WebApi/TaskBoard.WebApi.csproj" />
+    <Project Path="samples/TaskBoard.Watcher/TaskBoard.Watcher.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/PgNotify.Analyzers/PgNotify.Analyzers.csproj" />
+    <Project Path="src/PgNotify.Core/PgNotify.Core.csproj" />
+    <Project Path="src/PgNotify.EFCore/PgNotify.EFCore.csproj" />
+    <Project Path="src/PgNotify.Listener/PgNotify.Listener.csproj" />
+    <Project Path="src/PgNotify.Migrations/PgNotify.Migrations.csproj" />
+    <Project Path="src/PgNotify.Runtime.EFCore/PgNotify.Runtime.EFCore.csproj" />
+    <Project Path="src/PgNotify.Runtime/PgNotify.Runtime.csproj" />
+    <Project Path="src/PgNotify.Writer/PgNotify.Writer.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/PgNotify.Analyzers.Tests/PgNotify.Analyzers.Tests.csproj" />
+    <Project Path="tests/PgNotify.Core.Tests/PgNotify.Core.Tests.csproj" />
+    <Project Path="tests/PgNotify.EFCore.Tests/PgNotify.EFCore.Tests.csproj" />
+    <Project Path="tests/PgNotify.IntegrationTests/PgNotify.IntegrationTests.csproj" />
+    <Project Path="tests/PgNotify.Migrations.Tests/PgNotify.Migrations.Tests.csproj" />
+    <Project Path="tests/PgNotify.Runtime.Tests/PgNotify.Runtime.Tests.csproj" />
+    <Project Path="tests/PgNotify.Runtime.EFCore.Tests/PgNotify.Runtime.EFCore.Tests.csproj" />
+  </Folder>
+</Solution>

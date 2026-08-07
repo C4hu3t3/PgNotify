@@ -1,0 +1,90 @@
+using PgNotify.Naming;
+using PgNotify.Payloads;
+
+namespace PgNotify.Model;
+
+/// <summary>
+/// The fully resolved, immutable notification configuration for one entity. Computed once by
+/// <c>PgNotify.EFCore</c> from either the <see cref="NotifyChangesAttribute"/> or the
+/// <c>HasDatabaseNotifications()</c> fluent API, and consumed by both
+/// <c>PgNotify.Migrations</c> (to generate trigger SQL) and, where useful, the source
+/// generator. This is the single source of truth both subsystems agree on — neither duplicates
+/// the interpretation of raw annotations.
+/// </summary>
+public sealed record NotificationEntityConfiguration
+{
+    /// <summary>The CLR entity type's simple name (e.g. <c>User</c>).</summary>
+    public required string EntityDisplayName { get; init; }
+
+    /// <summary>The mapped schema, or <see langword="null"/> for the default schema.</summary>
+    public string? Schema { get; init; }
+
+    /// <summary>The mapped table name (e.g. <c>users</c>).</summary>
+    public required string TableName { get; init; }
+
+    /// <summary>The operations that raise a notification.</summary>
+    public required NotificationOperations Operations { get; init; }
+
+    /// <summary>The primary key column names, in key order. Never empty: notifications require a primary key.</summary>
+    public required IReadOnlyList<string> KeyColumns { get; init; }
+
+    /// <summary>
+    /// The column names to watch for <c>OnUpdate</c>. Empty means "any mapped column change"
+    /// (an unfiltered <c>UPDATE</c> trigger).
+    /// </summary>
+    public IReadOnlyList<string> WatchedUpdateColumns { get; init; } = [];
+
+    /// <summary>The strategy used to compute the channel name, unless overridden by <see cref="ChannelNameOverride"/>.</summary>
+    public required INotificationChannelNamingStrategy ChannelStrategy { get; init; }
+
+    /// <summary>
+    /// An explicit channel name that overrides <see cref="ChannelStrategy"/> for every operation,
+    /// set via the fluent API's <c>WithChannelName(...)</c>.
+    /// </summary>
+    public string? ChannelNameOverride { get; init; }
+
+    /// <summary>
+    /// The columns selected by <c>WithPayload(x =&gt; new { ... })</c>, in the order written. Empty
+    /// unless <see cref="PayloadBuilder"/> is a <see cref="ProjectedNotificationPayloadBuilder"/>.
+    /// </summary>
+    public IReadOnlyList<NotificationPayloadColumn> PayloadColumns { get; init; } = [];
+
+    /// <summary>The payload builder describing the JSON shape the trigger should emit.</summary>
+    public required INotificationPayloadBuilder PayloadBuilder { get; init; }
+
+    /// <summary>
+    /// What the trigger does when the payload would exceed <c>pg_notify</c>'s 7999-byte limit.
+    /// Defaults to <see cref="NotificationPayloadOverflow.Truncate"/>, because the alternative
+    /// aborts the write that produced the row.
+    /// </summary>
+    public NotificationPayloadOverflow PayloadOverflow { get; init; } = NotificationPayloadOverflow.Truncate;
+
+    /// <summary>
+    /// Prepended to the generated trigger/function names (<c>{NamePrefix}trg_{table}_notify</c> /
+    /// <c>{NamePrefix}fn_{schema_}{table}_notify</c>), so generated objects can be made
+    /// unambiguous and collision-free against names you already use — most useful when this
+    /// library doesn't fully own the database (see <c>EnsureNotificationTriggersAsync</c>).
+    /// Empty by default, preserving the original unprefixed names.
+    /// </summary>
+    public string NamePrefix { get; init; } = "";
+
+    /// <summary>Resolves the channel name for a specific operation, honoring <see cref="ChannelNameOverride"/> first.</summary>
+    public string GetChannelName(NotificationOperation operation)
+    {
+        if (ChannelNameOverride is { Length: > 0 } overrideName)
+        {
+            return PostgresIdentifier.EnsureWithinLength(overrideName);
+        }
+
+        var context = new NotificationChannelNamingContext(EntityDisplayName, Schema, TableName, operation);
+        return ChannelStrategy.GetChannelName(context);
+    }
+
+    /// <summary>Builds the payload field list for this entity via <see cref="PayloadBuilder"/>.</summary>
+    public IReadOnlyList<NotificationPayloadField> BuildPayloadFields()
+    {
+        var context = new NotificationPayloadBuilderContext(
+            EntityDisplayName, Schema, TableName, KeyColumns, WatchedUpdateColumns, PayloadColumns);
+        return PayloadBuilder.BuildFields(context);
+    }
+}

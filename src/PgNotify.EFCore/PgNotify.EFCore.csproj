@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>EF Core model-building integration for PostgreSQL notifications: [NotifyChanges] attribute, HasDatabaseNotifications() fluent API, and the annotation-backed configuration model.</Description>
+    <PackageId>PgNotify.EFCore</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.Core\PgNotify.Core.csproj" />
+  </ItemGroup>
+
+</Project>

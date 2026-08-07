@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Meta-package for the "listen side" of a PostgreSQL notifications setup: pulls in PgNotify.Runtime and PgNotify.Runtime.EFCore, so a listener process that has a DbContext needs one package reference and derives its channels from the model. A listener with no EF Core at all can reference PgNotify.Runtime directly instead. Contains no code of its own.</Description>
+    <PackageId>PgNotify.Listener</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+    <ProjectReference Include="..\PgNotify.Runtime.EFCore\PgNotify.Runtime.EFCore.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace (meant for the library
+         projects) so `dotnet ef migrations add` derives a sensible Migrations/ namespace. -->
+    <RootNamespace>TaskBoard.WebApi</RootNamespace>
+    <UserSecretsId>d4e6b8a2-9c1f-4a3e-8b7d-1f5c3e9a2b6d</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- TaskItem itself lives in TaskBoard.Model, shared with TaskBoard.Watcher (see its README).
+         Deliberately does NOT reference PgNotify.Runtime: this app only writes data.
+         TaskBoard.Watcher (a separate process) is the one that listens. -->
+    <ProjectReference Include="..\TaskBoard.Model\TaskBoard.Model.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.EFCore\PgNotify.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Migrations\PgNotify.Migrations.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Runtime PostgreSQL LISTEN/NOTIFY listener: dedicated connection management, automatic reconnect with backoff, a middleware dispatch pipeline, typed event streaming, DI registration, and health checks.</Description>
+    <PackageId>PgNotify.Runtime</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
+    <PackageReference Include="Microsoft.Extensions.Options" />
+    <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
+    <!-- IChangeToken / CancellationChangeToken, part of the public Caching API surface. -->
+    <PackageReference Include="Microsoft.Extensions.Primitives" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.Core\PgNotify.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Core, provider-agnostic abstractions for PostgreSQL LISTEN/NOTIFY based EF Core notifications: channel naming strategies, payload contracts, and notification envelopes.</Description>
+    <PackageId>PgNotify.Core</PackageId>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace, same as every other sample
+         project (not load-bearing here the way it is for Orders.WebApi's dotnet-ef tooling, just
+         kept for consistency). -->
+    <RootNamespace>Orders.Model</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- PgNotify.Core alone, for [NotifyChanges]: no EF Core, no Npgsql, no runtime. Both
+         Orders.WebApi and Orders.Projector map this entity with their own, separate DbContext -
+         see README.md for why that's a different (and slightly less forgiving) sharing situation
+         than TaskBoard.Model's. -->
+    <ProjectReference Include="..\..\src\PgNotify.Core\PgNotify.Core.csproj" />
+  </ItemGroup>
+
+</Project>

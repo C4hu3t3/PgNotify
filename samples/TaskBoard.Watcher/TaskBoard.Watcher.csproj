@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace (meant for the library
+         projects), same as every other sample project. -->
+    <RootNamespace>TaskBoard.Watcher</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- TaskBoard.Model, for the TaskItem POCO the streams are keyed on - but not TaskBoard.WebApi,
+         and no EF Core / Npgsql.EntityFrameworkCore.PostgreSQL package at all, which is what proves
+         PgNotify.Runtime's listener needs neither. -->
+    <ProjectReference Include="..\TaskBoard.Model\TaskBoard.Model.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace, which is meant for the
+         library projects. -->
+    <RootNamespace>HttpCaching.WebApi</RootNamespace>
+    <UserSecretsId>b7f4c2d9-58a1-4f3e-8c6d-19a4e7b0c5f2</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- No Microsoft.EntityFrameworkCore.Design here, unlike CacheInvalidation.WebApi: this sample
+         needs no `dotnet ef` at all, since the schema and the triggers are created at startup. -->
+    <ProjectReference Include="..\..\src\PgNotify.Core\PgNotify.Core.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.EFCore\PgNotify.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Migrations\PgNotify.Migrations.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime.EFCore\PgNotify.Runtime.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

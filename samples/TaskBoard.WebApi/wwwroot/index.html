@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>TaskBoard</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; color: #1a1a1a; }
+  h1 { font-size: 1.25rem; }
+  p.hint { color: #666; font-size: 0.9rem; }
+  form { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; }
+  input[type="text"] { flex: 1; padding: 0.4rem 0.6rem; font-size: 1rem; }
+  button { padding: 0.4rem 0.8rem; font-size: 1rem; cursor: pointer; }
+  ul { list-style: none; padding: 0; }
+  li { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0; border-bottom: 1px solid #eee; }
+  li .title { flex: 1; }
+  li.done .title { text-decoration: line-through; color: #999; }
+  li button.delete { color: #b00020; background: none; border: none; font-size: 1.1rem; }
+</style>
+</head>
+<body>
+<h1>TaskBoard</h1>
+<p class="hint">
+  Changes made here are written through <code>SampleDbContext</code>. Run the separate
+  <code>TaskBoard.Watcher</code> console app to see every insert/update/delete arrive as a
+  PostgreSQL <code>NOTIFY</code> in real time, independent of this page.
+</p>
+
+<form id="add-form">
+  <input type="text" id="new-title" placeholder="New task…" required />
+  <button type="submit">Add</button>
+</form>
+
+<ul id="task-list"></ul>
+
+<script>
+  const list = document.getElementById('task-list');
+  const form = document.getElementById('add-form');
+  const newTitle = document.getElementById('new-title');
+
+  async function loadTasks() {
+    const response = await fetch('/api/tasks');
+    const tasks = await response.json();
+    list.replaceChildren(...tasks.map(renderTask));
+  }
+
+  function renderTask(task) {
+    const li = document.createElement('li');
+    li.className = task.isDone ? 'done' : '';
+
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.checked = task.isDone;
+    checkbox.addEventListener('change', () => updateTask(task, { isDone: checkbox.checked }));
+
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = task.title;
+    title.title = 'Click to rename';
+    title.addEventListener('click', () => {
+      const next = prompt('Rename task', task.title);
+      if (next && next.trim() && next !== task.title) {
+        updateTask(task, { title: next.trim() });
+      }
+    });
+
+    const del = document.createElement('button');
+    del.className = 'delete';
+    del.textContent = '✕';
+    del.addEventListener('click', () => deleteTask(task));
+
+    li.append(checkbox, title, del);
+    return li;
+  }
+
+  async function updateTask(task, patch) {
+    await fetch(`/api/tasks/${task.id}`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title: task.title, isDone: task.isDone, ...patch }),
+    });
+    await loadTasks();
+  }
+
+  async function deleteTask(task) {
+    await fetch(`/api/tasks/${task.id}`, { method: 'DELETE' });
+    await loadTasks();
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const title = newTitle.value.trim();
+    if (!title) return;
+    await fetch('/api/tasks', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ title, isDone: false }),
+    });
+    newTitle.value = '';
+    await loadTasks();
+  });
+
+  loadTasks();
+</script>
+</body>
+</html>

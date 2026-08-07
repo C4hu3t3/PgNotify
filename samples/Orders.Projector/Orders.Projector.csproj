@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace, same as every other sample
+         project. -->
+    <RootNamespace>Orders.Projector</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Needed to build and open its own DbContext (.UseNpgsql(...)) — PgNotify.Listener /
+         PgNotify.Runtime.EFCore deliberately never reference the Npgsql EF Core provider (see
+         PgNotify.Runtime.EFCore's own project comment): a listener process should not have
+         to carry that just to read a model. -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- One reference, not two: PgNotify.Listener bundles Runtime + Runtime.EFCore (and
+         Runtime.EFCore itself pulls in EFCore, for the .UseNpgsqlNotifications() marker and
+         AddNotificationMappingFromDbContexts() below). Contrast with TaskBoard.Watcher, which
+         references PgNotify.Runtime alone because it has no DbContext of its own to derive a
+         mapping from. -->
+    <ProjectReference Include="..\Orders.Model\Orders.Model.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Listener\PgNotify.Listener.csproj" />
+  </ItemGroup>
+
+</Project>
