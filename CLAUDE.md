@@ -59,10 +59,16 @@ warnings and `EnableNETAnalyzers`, so `dotnet build` is the lint check.
 ## Solution layout and why
 
 Central Package Management (`Directory.Packages.props`) pins all versions; `Directory.Build.props`
-sets `net10.0`, nullable, and `RootNamespace = PgNotify`
-for every project **except** `samples/CacheInvalidation.WebApi`, which overrides `RootNamespace`
-back to its own name in its own `.csproj` — without that override, `dotnet ef migrations add`
-derives the wrong `Migrations/` namespace from the solution-wide default.
+sets nullable and `RootNamespace = PgNotify` for every project **except**
+`samples/CacheInvalidation.WebApi`, which overrides `RootNamespace` back to its own name in its own
+`.csproj` — without that override, `dotnet ef migrations add` derives the wrong `Migrations/`
+namespace from the solution-wide default. Target framework is `net10.0` by default; every packable
+`src/` library (everything except `PgNotify.Analyzers`) and every `tests/` project instead
+multi-target `net10.0;net11.0`, so the published packages support both the current LTS runtime and
+the next preview one, and `dotnet test` actually runs the suite on both rather than only compiling
+against them. `.github/workflows/build.yml` installs both SDKs (`include-prerelease: true` for
+.NET 11) for exactly this reason — building with only the .NET 10 SDK fails with `NETSDK1045` on
+every `net11.0` target.
 
 - `PgNotify.Core` — provider-agnostic vocabulary (channel-naming strategies, payload
   contracts, `NotificationEnvelope`). No EF Core, no Npgsql dependency at all.
@@ -80,9 +86,10 @@ derives the wrong `Migrations/` namespace from the solution-wide default.
   Core **Relational**, never `Npgsql.EntityFrameworkCore.PostgreSQL`, and is written entirely
   against `Runtime`'s public `INotificationMappingSource` — it needs no internals of either side,
   which is the check that the extension point is real.
-- `PgNotify.Analyzers` — `netstandard2.0` (required for Roslyn analyzer hosting; everything
-  else targets `net10.0` directly). Pattern-matches on attribute/type names as strings — no project
-  reference to `PgNotify.Core`.
+- `PgNotify.Analyzers` — `netstandard2.0` (required for Roslyn analyzer hosting; the one `src/`
+  project that doesn't multi-target `net10.0;net11.0`, since a Roslyn analyzer always runs hosted
+  on netstandard2.0 regardless of the consuming project's `TargetFramework`). Pattern-matches on
+  attribute/type names as strings — no project reference to `PgNotify.Core`.
 - `benchmarks/PgNotify.Benchmarks` — BenchmarkDotNet micro-benchmarks for
   `PgNotify.Runtime`'s per-notification hot path (channel-map lookup, dispatch, payload
   deserialization, `Events<TEntity>()` fan-out, middleware pipeline overhead). Not part of

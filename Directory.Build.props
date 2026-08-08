@@ -27,6 +27,20 @@
     <PackageTags>efcore;entity-framework-core;postgresql;postgres;npgsql;listen-notify;notifications;realtime;pubsub;cache-invalidation</PackageTags>
   </PropertyGroup>
 
+  <!-- Published packages must work on both the current LTS runtime and the next preview: every
+       packable src/ library multi-targets net10.0 and net11.0. PgNotify.Analyzers is the one
+       exception - it keeps its own netstandard2.0 override in its .csproj, since a Roslyn
+       analyzer always runs hosted on netstandard2.0 regardless of the consuming project's
+       TargetFramework. Test projects multi-target the same two TFMs too, so `dotnet test`
+       actually exercises both runtimes instead of just compiling against them; samples and
+       benchmarks stay on the single default TargetFramework above since they exist to demonstrate
+       usage, not to prove compatibility. TargetFramework must be cleared before TargetFrameworks
+       is set - the SDK rejects a project with both non-empty (NETSDK1013). -->
+  <PropertyGroup Condition="($(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)src$([System.IO.Path]::DirectorySeparatorChar)')) AND '$(MSBuildProjectName)' != 'PgNotify.Analyzers') OR $(MSBuildProjectDirectory.Contains('$([System.IO.Path]::DirectorySeparatorChar)tests$([System.IO.Path]::DirectorySeparatorChar)'))">
+    <TargetFramework></TargetFramework>
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
+  </PropertyGroup>
+
   <!-- Every packable project embeds the repo's root README as its NuGet readme — same source
        everyone landing on the package page from the repo already reads, not a per-package
        duplicate to keep in sync. $(MSBuildThisFileDirectory) is this props file's own directory

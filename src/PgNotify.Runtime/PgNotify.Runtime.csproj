@@ -7,13 +7,7 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" />
-    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
-    <PackageReference Include="Microsoft.Extensions.Options" />
     <PackageReference Include="Microsoft.Extensions.Options.DataAnnotations" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" />
-    <!-- IChangeToken / CancellationChangeToken, part of the public Caching API surface. -->
-    <PackageReference Include="Microsoft.Extensions.Primitives" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
   </ItemGroup>
 

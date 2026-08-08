@@ -26,10 +26,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # PgNotify.Runtime.csproj etc. multi-target net10.0;net11.0 (see Directory.Build.props), so
+      # the runner needs both SDKs side by side - the .NET 10 SDK alone fails with NETSDK1045 on
+      # every net11.0 TargetFramework. .NET 11 is still preview (GA expected November 2026), hence
+      # include-prerelease.
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '10.0.x'
+          dotnet-version: |
+            10.0.x
+            11.0.x
+          include-prerelease: true
 
       - name: Restore
         run: dotnet restore
