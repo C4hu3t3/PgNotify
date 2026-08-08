@@ -45,14 +45,37 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       # Excludes PgNotify.IntegrationTests - run separately below so a failure there is
-      # attributed clearly instead of being buried in one big test step.
+      # attributed clearly instead of being buried in one big test step. --collect:"XPlat Code
+      # Coverage" uses coverlet.collector (already a PackageReference of every test project) to
+      # write one coverage.cobertura.xml per (project, TFM) combination under ./TestResults -
+      # already gitignored ([Tt]est[Rr]esult*/), so this needs no new ignore rule.
       - name: Run fast tests
-        run: dotnet test --no-build --configuration Release --filter "FullyQualifiedName!~IntegrationTests"
+        run: >
+          dotnet test --no-build --configuration Release
+          --filter "FullyQualifiedName!~IntegrationTests"
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults
 
       # ubuntu-latest runners have Docker pre-installed, so the Testcontainers-based suite (real
       # PostgreSQL via postgres:16-alpine) works without extra setup - see CLAUDE.md.
       - name: Run Docker integration tests
-        run: dotnet test tests/PgNotify.IntegrationTests/PgNotify.IntegrationTests.csproj --no-build --configuration Release
+        run: >
+          dotnet test tests/PgNotify.IntegrationTests/PgNotify.IntegrationTests.csproj
+          --no-build --configuration Release
+          --collect:"XPlat Code Coverage"
+          --results-directory ./TestResults
+
+      # ReportGenerator merges every cobertura file above (net10.0 and net11.0 runs of the same
+      # sources included) into one summary and writes it as GitHub-flavored markdown, which is
+      # then appended straight to the run's Summary tab - no external service, no secret to store.
+      - name: Publish coverage summary
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool
+          reportgenerator \
+            -reports:"./TestResults/**/coverage.cobertura.xml" \
+            -targetdir:"./TestResults/report" \
+            -reporttypes:"MarkdownSummaryGithub"
+          cat ./TestResults/report/*.md >> "$GITHUB_STEP_SUMMARY"
 
       # Tag pushes (v1.2.3) get that exact version; every other build gets a clearly-non-release
       # version so it's obvious these packages were never meant to be consumed.
