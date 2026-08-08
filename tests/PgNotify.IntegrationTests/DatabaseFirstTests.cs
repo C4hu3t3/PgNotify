@@ -115,6 +115,41 @@ public sealed class DatabaseFirstTests : IAsyncLifetime
     }
 
     [Fact]
+    public void EnsureNotificationTriggers_sync_overload_can_be_called_without_error()
+    {
+        // EnsureNotificationTriggersAsync is what every other test in this file exercises, which
+        // left the sync overload - and NotificationTriggerStateReader.Read/ReadResults, its only
+        // caller - completely untested.
+        var contextOptions = new DbContextOptionsBuilder<IntegrationDbContext>()
+            .UseNpgsql(_connectionString)
+            .UseNpgsqlNotifications()
+            .Options;
+
+        using var context = new IntegrationDbContext(contextOptions);
+        var act = () => context.Database.EnsureNotificationTriggers();
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public async Task EnsureNotificationTriggers_sync_overload_skips_regenerating_the_function_when_nothing_changed()
+    {
+        var contextOptions = new DbContextOptionsBuilder<IntegrationDbContext>()
+            .UseNpgsql(_connectionString)
+            .UseNpgsqlNotifications()
+            .Options;
+
+        using var context = new IntegrationDbContext(contextOptions);
+        context.Database.EnsureNotificationTriggers();
+        var before = await GetFunctionXminAsync();
+
+        context.Database.EnsureNotificationTriggers();
+        var after = await GetFunctionXminAsync();
+
+        after.Should().Be(before);
+    }
+
+    [Fact]
     public async Task EnsureNotificationTriggersAsync_skips_regenerating_the_function_when_nothing_changed()
     {
         var contextOptions = new DbContextOptionsBuilder<IntegrationDbContext>()

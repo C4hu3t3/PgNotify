@@ -283,6 +283,33 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public void IEntityChangeTrackerSource_Get_by_generic_type_resolves_to_the_same_tracker_as_Get_by_name()
+    {
+        // Get<TEntity>() is a default interface method that just forwards to Get(string) by CLR
+        // type name - EntityChangeTrackerRegistry never overrides it, so this is the only thing
+        // that exercises it at all.
+        var services = new ServiceCollection();
+        services.AddLogging();
+
+        services.AddPostgresNotifications(o =>
+        {
+            o.ConnectionString = "Host=localhost;Database=test";
+            o.AddChangeTracking();
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var source = provider.GetRequiredService<IEntityChangeTrackerSource>();
+
+        var byType = source.Get<TestUser>();
+        var byName = source.Get(nameof(TestUser));
+
+        var token = byType.GetChangeToken();
+        ((EntityChangeTracker)byName).MarkChanged(DateTimeOffset.UtcNow);
+
+        token.HasChanged.Should().BeTrue();
+    }
+
+    [Fact]
     public void AddChangeTracking_is_idempotent_and_keeps_the_last_coalescing_window()
     {
         var options = new PostgresNotificationsOptions();
