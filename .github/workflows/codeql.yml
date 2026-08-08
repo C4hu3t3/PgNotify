@@ -1,0 +1,66 @@
+name: CodeQL
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      security-events: write
+      contents: read
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # build-mode: manual gives CodeQL a real compilation to analyze (types resolved across
+          # files, source-generator output included, NuGet references available) instead of the
+          # default setup's build-mode: none, which only extracts C# by parsing source text and
+          # was flagging "Low C# analysis quality" on the code scanning status page.
+          - language: csharp
+            build-mode: manual
+          # github-actions is YAML, not compiled - build-mode: none is its only valid mode.
+          - language: actions
+            build-mode: none
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Only the csharp analysis builds anything. PgNotify.Runtime.csproj etc. multi-target
+      # net10.0;net11.0 (see Directory.Build.props), so both SDKs are needed - same reasoning as
+      # .github/workflows/build.yml.
+      - name: Setup .NET
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            10.0.x
+            11.0.x
+          include-prerelease: true
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - name: Build
+        if: matrix.language == 'csharp'
+        run: dotnet build --configuration Release
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
