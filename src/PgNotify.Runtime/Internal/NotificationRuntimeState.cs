@@ -1,3 +1,5 @@
+using Npgsql;
+
 namespace PgNotify.Internal;
 
 /// <summary>
@@ -13,6 +15,14 @@ namespace PgNotify.Internal;
 internal sealed class NotificationRuntimeState
 {
     public string ConnectionString { get; set; } = "";
+
+    /// <summary>
+    /// When set, the listener clones its actual connection from this rather than constructing one
+    /// from <see cref="ConnectionString"/> directly — see
+    /// <see cref="NotificationMappingBuilder.UseConnection"/> for why: the string alone may not
+    /// carry the password.
+    /// </summary>
+    public NpgsqlConnection? ListeningConnectionTemplate { get; set; }
 
     public IReadOnlyCollection<string> Channels { get; set; } = [];
 }

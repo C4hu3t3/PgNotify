@@ -1,6 +1,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using PgNotify.Dispatch;
 using PgNotify.Internal;
 using PgNotify.Serialization;
@@ -58,7 +59,7 @@ internal sealed class PostgresNotificationHostedService(
             }
         }
 
-        state.ConnectionString = ResolveConnectionString(builder);
+        (state.ConnectionString, state.ListeningConnectionTemplate) = ResolveConnection(builder);
 
         state.Channels = [.. channelMap.Channels];
         channelMap.MarkMappingResolved();
@@ -78,32 +79,39 @@ internal sealed class PostgresNotificationHostedService(
         }
     }
 
-    private string ResolveConnectionString(NotificationMappingBuilder builder)
+    private (string ConnectionString, NpgsqlConnection? Template) ResolveConnection(NotificationMappingBuilder builder)
     {
-        var connectionString = options.ConnectionString is { Length: > 0 } configured
-            ? configured
-            : builder.ProposedConnectionStrings.Count switch
-            {
-                1 => builder.ProposedConnectionStrings.Single(),
-                0 => throw new InvalidOperationException(
-                    $"No connection string for the notification listener: set {nameof(PostgresNotificationsOptions)}." +
-                    $"{nameof(PostgresNotificationsOptions.ConnectionString)}, or register an " +
-                    $"{nameof(INotificationMappingSource)} that supplies one."),
+        // An explicit options.ConnectionString never gets a template: it is a first-class,
+        // DbContext-free path, so there is no source connection to clone real credentials from -
+        // the string it names has to carry its own password, same as before this existed.
+        if (options.ConnectionString is { Length: > 0 } configured)
+        {
+            return (NotificationConnectionString.ForListening(configured), null);
+        }
 
-                // Silently taking one of them would point the listener at a database nobody chose, and
-                // the symptom - notifications from the other one never arriving - looks like anything
-                // but a connection string.
-                _ => throw new InvalidOperationException(
-                    $"{builder.ProposedConnectionStrings.Count} different connection strings were proposed for the " +
-                    $"notification listener. Set {nameof(PostgresNotificationsOptions)}." +
-                    $"{nameof(PostgresNotificationsOptions.ConnectionString)} explicitly, or narrow the mapping to one source."),
-            };
+        var connectionString = builder.ProposedConnectionStrings.Count switch
+        {
+            1 => builder.ProposedConnectionStrings.Single(),
+            0 => throw new InvalidOperationException(
+                $"No connection string for the notification listener: set {nameof(PostgresNotificationsOptions)}." +
+                $"{nameof(PostgresNotificationsOptions.ConnectionString)}, or register an " +
+                $"{nameof(INotificationMappingSource)} that supplies one."),
 
-        // Applied unconditionally, even on a connection string DbContextNotificationMappingSource
-        // already ran through this: idempotent, and the only way to guarantee an explicit
-        // options.ConnectionString (a first-class, DbContext-free path) doesn't inherit
-        // Multiplexing/Pooling from an application connection string it was copied from.
-        return NotificationConnectionString.ForListening(connectionString);
+            // Silently taking one of them would point the listener at a database nobody chose, and
+            // the symptom - notifications from the other one never arriving - looks like anything
+            // but a connection string.
+            _ => throw new InvalidOperationException(
+                $"{builder.ProposedConnectionStrings.Count} different connection strings were proposed for the " +
+                $"notification listener. Set {nameof(PostgresNotificationsOptions)}." +
+                $"{nameof(PostgresNotificationsOptions.ConnectionString)} explicitly, or narrow the mapping to one source."),
+        };
+
+        // Applied unconditionally, even though every proposer already ran its string through this:
+        // idempotent, so free insurance against a source that forgot to - and TemplateFor relies on
+        // that same idempotency to find the template UseConnection recorded under the once-applied
+        // string, by looking it up under the twice-applied one instead.
+        var listening = NotificationConnectionString.ForListening(connectionString);
+        return (listening, builder.TemplateFor(listening));
     }
 
     /// <inheritdoc />
@@ -136,6 +144,12 @@ internal sealed class PostgresNotificationHostedService(
         await listener.DrainInFlightDispatchesAsync(TimeSpan.FromSeconds(10)).ConfigureAwait(false);
 
         await listener.DisposeAsync().ConfigureAwait(false);
+
+        if (state.ListeningConnectionTemplate is { } template)
+        {
+            await template.DisposeAsync().ConfigureAwait(false);
+            state.ListeningConnectionTemplate = null;
+        }
     }
 
     private async Task OnNotificationReceivedAsync(string channel, string payload)

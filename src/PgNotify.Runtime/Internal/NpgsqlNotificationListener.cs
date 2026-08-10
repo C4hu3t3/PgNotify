@@ -95,7 +95,12 @@ internal sealed class NpgsqlNotificationListener(
         // starting, which happens after this instance was constructed.
         var channels = state.Channels;
 
-        var connection = new NpgsqlConnection(state.ConnectionString);
+        // When a template is present, its connection string omits the password on purpose (see
+        // NotificationMappingBuilder.UseConnection) - CloneWith still authenticates correctly
+        // because it clones the template's actual bound credentials, not its displayed string.
+        var connection = state.ListeningConnectionTemplate is { } template
+            ? template.CloneWith(state.ConnectionString)
+            : new NpgsqlConnection(state.ConnectionString);
         try
         {
             await connection.OpenAsync(cancellationToken).ConfigureAwait(false);

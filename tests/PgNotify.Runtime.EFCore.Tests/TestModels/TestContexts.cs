@@ -88,6 +88,29 @@ public sealed class TopicOrderContext(DbContextOptions<TopicOrderContext> option
 }
 
 /// <summary>
+/// Same shape as <see cref="ProductContext"/>, but with no <c>OnConfiguring</c> override: a pooled
+/// context's options are frozen once built, so <c>ReplaceService</c> has to be chained onto the
+/// options builder passed to <c>AddPooledDbContextFactory</c> instead - calling it from
+/// <c>OnConfiguring</c> throws under pooling.
+/// </summary>
+public sealed class PooledProductContext(DbContextOptions<PooledProductContext> options) : DbContext(options)
+{
+    public DbSet<Product> Products => Set<Product>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder) =>
+        modelBuilder.Entity<Product>(b =>
+        {
+            b.ToTable("products");
+            b.HasDatabaseNotifications(o =>
+            {
+                o.OnInsert();
+                o.OnUpdate();
+                o.OnDelete();
+            });
+        });
+}
+
+/// <summary>
 /// Marked via UseNpgsqlNotificationsListening() (from PgNotify.EFCore), not the full
 /// UseNpgsqlNotifications() (from PgNotify.Migrations) every other context here uses — the
 /// listener-only entry point a process with no migrations stack would call.

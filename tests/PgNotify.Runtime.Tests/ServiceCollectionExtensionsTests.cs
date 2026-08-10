@@ -100,6 +100,35 @@ public class ServiceCollectionExtensionsTests
     }
 
     [Fact]
+    public async Task An_explicit_connection_string_never_gets_a_template_even_when_a_source_also_proposed_one()
+    {
+        // options.ConnectionString has no DbContext/NpgsqlConnection behind it to clone real
+        // credentials from - it has to carry its own password as text, same as before templates
+        // existed, even if a source happened to also propose one for a different database.
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddPostgresNotifications(o => o.ConnectionString = "Host=localhost;Database=explicit;Password=p");
+        services.AddSingleton<INotificationMappingSource>(new DelegateMappingSource(b =>
+        {
+            using var connection = new Npgsql.NpgsqlConnection("Host=unroutable.invalid;Database=from_source;Username=u;Password=p");
+            b.UseConnection(connection);
+        }));
+
+        await using var provider = services.BuildServiceProvider();
+        var hostedService = NotificationHostedService(provider);
+        await hostedService.StartAsync(CancellationToken.None);
+
+        try
+        {
+            provider.GetRequiredService<NotificationRuntimeState>().ListeningConnectionTemplate.Should().BeNull();
+        }
+        finally
+        {
+            await hostedService.StopAsync(CancellationToken.None);
+        }
+    }
+
+    [Fact]
     public void AddPostgresNotifications_registers_the_public_notification_service()
     {
         var services = new ServiceCollection();

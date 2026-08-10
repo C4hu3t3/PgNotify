@@ -6,7 +6,9 @@ namespace PgNotify.Internal;
 
 /// <summary>
 /// Derives the listener's channels from the model of every registered <c>DbContext</c> that opted
-/// into notifications, and offers that context's connection string as the listener's.
+/// into notifications, and offers that context's connection - string and, when needed, a
+/// credential-carrying template - as the listener's; see
+/// <see cref="NotificationMappingBuilder.UseConnection"/>.
 /// </summary>
 /// <param name="services">
 /// The application's service collection, kept to enumerate which <c>DbContext</c> types were
@@ -72,12 +74,12 @@ internal sealed class DbContextNotificationMappingSource(
             channelCount++;
         }
 
-        if (context.Database.GetConnectionString() is { Length: > 0 } connectionString)
-        {
-            // Never verbatim: the application's string is written for pooled, possibly multiplexed
-            // query connections, and a LISTEN connection can be neither.
-            builder.UseConnectionString(NotificationConnectionString.ForListening(connectionString));
-        }
+        // Never verbatim, and not necessarily a password either: the application's connection is
+        // written for pooled, possibly multiplexed query connections - and, when configured via
+        // UseNpgsql(NpgsqlDataSource, ...), its own connection string omits the password outright.
+        // UseConnection() handles both: it derives the LISTEN-adjusted string, and - when needed -
+        // a template connection that still authenticates correctly regardless.
+        builder.UseConnection(context.Database.GetDbConnection());
 
         logger.LogInformation(
             "Derived {ChannelCount} notification channel mapping(s) from {DbContext}", channelCount, candidate.Name);

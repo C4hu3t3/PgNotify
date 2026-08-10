@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using PgNotify;
 using PgNotify.Internal;
 using PgNotify.Serialization;
@@ -226,6 +227,39 @@ public class DbContextNotificationMappingTests
             resolved.Multiplexing.Should().BeFalse();
             resolved.Pooling.Should().BeFalse();
             resolved.Database.Should().Be("products");
+        }
+        finally
+        {
+            await StopAsync(provider);
+        }
+    }
+
+    [Fact]
+    public async Task A_context_registered_only_via_AddPooledDbContextFactory_is_discovered_with_its_password()
+    {
+        // Since EF Core 8, AddPooledDbContextFactory also registers TContext itself as a scoped
+        // service alongside IDbContextFactory<TContext> - this is what discovery actually relies
+        // on. No AddDbContext and no NpgsqlDataSource here: UseNpgsql gets a literal connection
+        // string directly, so Database.GetConnectionString() returns it (including the password)
+        // unaltered - unlike the NpgsqlDataSource overload, whose ConnectionString omits the
+        // password unless "Persist Security Info=true" was set.
+        var provider = await StartAsync(services =>
+        {
+            services.AddPooledDbContextFactory<PooledProductContext>(o => o
+                .UseNpgsql(ProductConnectionString)
+                .UseNpgsqlNotifications()
+                .ReplaceService<IModelCacheKeyFactory, UncachedModelCacheKeyFactory>());
+            services.AddPostgresNotifications(options => options.AddNotificationMappingFromDbContexts());
+        });
+
+        try
+        {
+            var state = provider.GetRequiredService<NotificationRuntimeState>();
+            state.Channels.Should().BeEquivalentTo(["products"]);
+
+            var resolved = new NpgsqlConnectionStringBuilder(state.ConnectionString);
+            resolved.Database.Should().Be("products");
+            resolved.Password.Should().Be("p");
         }
         finally
         {

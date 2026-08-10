@@ -26,10 +26,13 @@ public static class NotificationsEFCoreServiceCollectionExtensions
     /// connection.
     /// </summary>
     /// <remarks>
-    /// Order-independent with respect to <c>AddDbContext</c>, because the models are read when the
-    /// host starts, not here. Contexts registered as <c>IDbContextFactory&lt;T&gt;</c> only are not
-    /// discovered — nothing registers <c>T</c> itself for those — so name them with
-    /// <see cref="AddNotificationMappingFromDbContext{TContext}"/> instead.
+    /// Order-independent with respect to <c>AddDbContext</c>/<c>AddDbContextFactory</c>/
+    /// <c>AddPooledDbContextFactory</c>, because the models are read when the host starts, not
+    /// here. Since EF Core 8, <c>AddDbContextFactory</c>/<c>AddPooledDbContextFactory</c> also
+    /// register <c>TContext</c> itself as a scoped service alongside
+    /// <c>IDbContextFactory&lt;TContext&gt;</c>, so a context registered only that way is still
+    /// discovered here — no need to fall back to
+    /// <see cref="AddNotificationMappingFromDbContext{TContext}"/> for that reason alone.
     /// </remarks>
     public static PostgresNotificationsOptions AddNotificationMappingFromDbContexts(this PostgresNotificationsOptions options) =>
         options.AddDbContextMappingSource(contextType: null);
