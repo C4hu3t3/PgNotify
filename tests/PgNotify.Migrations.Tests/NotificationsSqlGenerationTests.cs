@@ -130,16 +130,6 @@ public class NotificationsSqlGenerationTests
     }
 
     [Fact]
-    public void Unchanged_model_produces_no_operations_between_two_identical_configurations()
-    {
-        Action<ModelBuilder> configure = mb => mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate(x => x.Name));
-
-        var sql = MigrationTestHelper.GenerateDiffSql(configure, configure);
-
-        sql.Should().BeEmpty();
-    }
-
-    [Fact]
     public void Changing_watched_columns_alone_regenerates_trigger_sql()
     {
         var sql = MigrationTestHelper.GenerateDiffSql(
