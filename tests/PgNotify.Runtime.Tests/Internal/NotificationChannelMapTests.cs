@@ -123,4 +123,29 @@ public class NotificationChannelMapTests
 
         map.MappedEntityTypes.Should().BeEquivalentTo([typeof(TestUser), typeof(TestOrder)]);
     }
+
+    [Fact]
+    public void MappedEntityNames_reflects_every_entity_name_bound_to_a_channel_without_duplicates()
+    {
+        var map = new NotificationChannelMap();
+        map.MapChannel("users", typeof(TestUser));
+        map.MapChannel("user.created", typeof(TestUser));
+        map.MapChannel("orders", typeof(TestOrder));
+        map.MapChannel("legacy_audit");
+
+        map.MappedEntityNames.Should().BeEquivalentTo(["TestUser", "TestOrder"]);
+    }
+
+    [Fact]
+    public void MappingResolved_is_false_until_explicitly_marked()
+    {
+        var map = new NotificationChannelMap();
+        map.MapChannel("users", typeof(TestUser));
+
+        map.MappingResolved.Should().BeFalse();
+
+        map.MarkMappingResolved();
+
+        map.MappingResolved.Should().BeTrue();
+    }
 }

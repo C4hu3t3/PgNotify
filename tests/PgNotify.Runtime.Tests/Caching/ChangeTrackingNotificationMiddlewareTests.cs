@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using PgNotify.Caching;
 using PgNotify.Dispatch;
+using PgNotify.Internal;
 using PgNotify.Serialization;
 
 namespace PgNotify.Runtime.Tests.Caching;
@@ -24,7 +25,7 @@ public class ChangeTrackingNotificationMiddlewareTests
         CancellationToken = CancellationToken.None,
     };
 
-    private static EntityChangeTrackerRegistry CreateRegistry() => new(TimeSpan.Zero, NullLogger<EntityChangeTrackerRegistry>.Instance);
+    private static EntityChangeTrackerRegistry CreateRegistry() => new(TimeSpan.Zero, new NotificationChannelMap(), NullLogger<EntityChangeTrackerRegistry>.Instance);
 
     [Fact]
     public async Task A_notification_invalidates_the_tracker_for_its_entity()

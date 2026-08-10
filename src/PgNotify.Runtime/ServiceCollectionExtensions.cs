@@ -102,6 +102,7 @@ public static class ServiceCollectionExtensions
         {
             services.AddSingleton(sp => new EntityChangeTrackerRegistry(
                 options.ChangeTrackingCoalesceWindow,
+                sp.GetRequiredService<NotificationChannelMap>(),
                 sp.GetRequiredService<ILogger<EntityChangeTrackerRegistry>>()));
             services.AddSingleton<IEntityChangeTrackerSource>(sp => sp.GetRequiredService<EntityChangeTrackerRegistry>());
             services.AddSingleton(typeof(IEntityChangeTracker<>), typeof(EntityChangeTrackerOf<>));

@@ -24,6 +24,28 @@ internal sealed class NotificationChannelMap
     public IEnumerable<Type> MappedEntityTypes => _dispatchers.Values.Select(d => d.EntityType).Distinct();
 
     /// <summary>
+    /// Every entity <b>name</b> actually bound to a channel — the same set as
+    /// <see cref="MappedEntityTypes"/>, keyed the way a notification payload's <c>"entity"</c>
+    /// field (and <c>PgNotify.Caching.EntityChangeTrackerRegistry</c>, which only ever sees a name)
+    /// identifies it, since a shared-type entity or a string-named
+    /// <c>ModelBuilder.Entity(string)</c> mapping can give a type a display name other than
+    /// <c>Type.Name</c>.
+    /// </summary>
+    public IReadOnlyCollection<string> MappedEntityNames => [.. _dispatchers.Keys.Select(k => k.Entity).Distinct(StringComparer.Ordinal)];
+
+    /// <summary>
+    /// Set once <c>PgNotify.PostgresNotificationHostedService.ResolveMappingAsync</c> has run every
+    /// <see cref="INotificationMappingSource"/> and this map holds its final, permanent contents for
+    /// the lifetime of the host. Before that point, an entity name missing from
+    /// <see cref="MappedEntityNames"/> proves nothing — the source that would have mapped it may not
+    /// have run yet.
+    /// </summary>
+    public bool MappingResolved { get; private set; }
+
+    /// <summary>Marks the map as holding its final contents; see <see cref="MappingResolved"/>.</summary>
+    public void MarkMappingResolved() => MappingResolved = true;
+
+    /// <summary>
     /// Listens on <paramref name="channel"/> without binding it to an entity type: only
     /// <see cref="IDatabaseNotificationHandler"/> sees its notifications. This is the entry a
     /// listener with no CLR entity types (another service's channel, a polyglot producer) uses.

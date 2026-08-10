@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Logging;
 using PgNotify;
+using PgNotify.Migrations;
 using PgNotify.Migrations.Internal;
 using PgNotify.Model;
 
@@ -26,9 +27,11 @@ namespace Microsoft.EntityFrameworkCore;
 /// <c>COMMENT ON FUNCTION</c> (a SHA-256 hash of the same fingerprint <c>Notifications:Fingerprint</c>
 /// is computed from for the migrations path — see <c>NotificationFingerprint.ComputeHash</c>) and
 /// skip an entity entirely when the deployed hash already matches and its trigger still exists —
-/// one read query, then only the DDL actually needed. This does not
-/// drop triggers for entities that used to be configured but no longer are (do that manually, the
-/// same as you would for any other schema element a database-first workflow retired).
+/// one read query, then only the DDL actually needed. Neither of them
+/// drops triggers for entities that used to be configured but no longer are — use
+/// <see cref="FindOrphanedNotificationTriggers"/>/<see cref="FindOrphanedNotificationTriggersAsync"/>
+/// to discover those, and <see cref="RemoveOrphanedNotificationTriggers"/>/
+/// <see cref="RemoveOrphanedNotificationTriggersAsync"/> to drop them.
 /// </remarks>
 public static class DatabaseFacadeNotificationsExtensions
 {
@@ -112,6 +115,142 @@ public static class DatabaseFacadeNotificationsExtensions
         }
 
         return script.ToString();
+    }
+
+    /// <summary>
+    /// Finds notification trigger/function pairs deployed in the database that no entity in the
+    /// current model asks for any more — see <see cref="OrphanedNotificationTrigger"/> for how
+    /// they're recognized and why nothing here drops them automatically. Requires
+    /// <c>UseNpgsqlNotifications()</c> to have been chained onto <c>UseNpgsql(...)</c>, the same as
+    /// <see cref="EnsureNotificationTriggers"/>.
+    /// </summary>
+    public static IReadOnlyList<OrphanedNotificationTrigger> FindOrphanedNotificationTriggers(this DatabaseFacade database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var (_, work) = PrepareWork(database);
+        var deployed = OrphanedNotificationTriggerReader.Read(database.GetDbConnection());
+        return BuildOrphans(database, work, deployed);
+    }
+
+    /// <summary>
+    /// Finds notification trigger/function pairs deployed in the database that no entity in the
+    /// current model asks for any more — see <see cref="OrphanedNotificationTrigger"/> for how
+    /// they're recognized and why nothing here drops them automatically. Requires
+    /// <c>UseNpgsqlNotifications()</c> to have been chained onto <c>UseNpgsql(...)</c>, the same as
+    /// <see cref="EnsureNotificationTriggersAsync"/>.
+    /// </summary>
+    public static async Task<IReadOnlyList<OrphanedNotificationTrigger>> FindOrphanedNotificationTriggersAsync(
+        this DatabaseFacade database, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var (_, work) = PrepareWork(database);
+        var deployed = await OrphanedNotificationTriggerReader.ReadAsync(database.GetDbConnection(), cancellationToken).ConfigureAwait(false);
+        return BuildOrphans(database, work, deployed);
+    }
+
+    /// <summary>
+    /// Finds and immediately drops every notification trigger/function pair
+    /// <see cref="FindOrphanedNotificationTriggers"/> would report — the destructive counterpart to
+    /// <see cref="EnsureNotificationTriggers"/>. Detection is a fingerprint match (see
+    /// <see cref="OrphanedNotificationTrigger"/>), not a guess based on naming, but it's still worth
+    /// calling <see cref="FindOrphanedNotificationTriggers"/> first to review what's about to be
+    /// removed — this method makes no other check before running each <c>DROP TRIGGER</c>/
+    /// <c>DROP FUNCTION ... CASCADE</c>. Requires <c>UseNpgsqlNotifications()</c> to have been
+    /// chained onto <c>UseNpgsql(...)</c>.
+    /// </summary>
+    /// <returns>What was removed, for logging or auditing by the caller.</returns>
+    public static IReadOnlyList<OrphanedNotificationTrigger> RemoveOrphanedNotificationTriggers(this DatabaseFacade database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var logger = GetLogger(database);
+        var orphans = FindOrphanedNotificationTriggers(database);
+
+        foreach (var orphan in orphans)
+        {
+            foreach (var statement in orphan.DropStatements)
+            {
+                database.ExecuteSqlRaw(statement);
+            }
+
+            LogRemoved(logger, orphan);
+        }
+
+        return orphans;
+    }
+
+    /// <summary>
+    /// Finds and immediately drops every notification trigger/function pair
+    /// <see cref="FindOrphanedNotificationTriggersAsync"/> would report — the destructive
+    /// counterpart to <see cref="EnsureNotificationTriggersAsync"/>. Detection is a fingerprint
+    /// match (see <see cref="OrphanedNotificationTrigger"/>), not a guess based on naming, but it's
+    /// still worth calling <see cref="FindOrphanedNotificationTriggersAsync"/> first to review
+    /// what's about to be removed — this method makes no other check before running each
+    /// <c>DROP TRIGGER</c>/<c>DROP FUNCTION ... CASCADE</c>. Requires <c>UseNpgsqlNotifications()</c>
+    /// to have been chained onto <c>UseNpgsql(...)</c>.
+    /// </summary>
+    /// <returns>What was removed, for logging or auditing by the caller.</returns>
+    public static async Task<IReadOnlyList<OrphanedNotificationTrigger>> RemoveOrphanedNotificationTriggersAsync(
+        this DatabaseFacade database, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var logger = GetLogger(database);
+        var orphans = await FindOrphanedNotificationTriggersAsync(database, cancellationToken).ConfigureAwait(false);
+
+        foreach (var orphan in orphans)
+        {
+            foreach (var statement in orphan.DropStatements)
+            {
+                await database.ExecuteSqlRawAsync(statement, cancellationToken).ConfigureAwait(false);
+            }
+
+            LogRemoved(logger, orphan);
+        }
+
+        return orphans;
+    }
+
+    private static ILogger? GetLogger(DatabaseFacade database) =>
+        database.GetService<ILoggerFactory>().CreateLogger("PgNotify.Migrations");
+
+    private static void LogRemoved(ILogger? logger, OrphanedNotificationTrigger orphan) =>
+        logger?.LogInformation(
+            "Removed orphaned notification trigger for {Table} (no entity in the current model configures it any more)",
+            $"{orphan.Schema}.{orphan.TableName}");
+
+    private static IReadOnlyList<OrphanedNotificationTrigger> BuildOrphans(
+        DatabaseFacade database, IReadOnlyList<NotificationWorkItem> work, IReadOnlyList<DeployedNotificationTrigger> deployed)
+    {
+        var expected = new HashSet<(string Schema, string FunctionName)>(work.Select(item => (item.Schema, item.FunctionName)));
+        var sqlGenerationHelper = database.GetService<ISqlGenerationHelper>();
+
+        return
+        [
+            .. deployed
+                .Where(d => !expected.Contains((d.Schema, d.FunctionName)))
+                .Select(d => ToOrphan(d, sqlGenerationHelper)),
+        ];
+    }
+
+    private static OrphanedNotificationTrigger ToOrphan(DeployedNotificationTrigger deployed, ISqlGenerationHelper sqlGenerationHelper)
+    {
+        var delimitedTrigger = sqlGenerationHelper.DelimitIdentifier(deployed.TriggerName);
+        var delimitedTable = sqlGenerationHelper.DelimitIdentifier(deployed.TableName, deployed.Schema);
+        var delimitedFunction = sqlGenerationHelper.DelimitIdentifier(deployed.FunctionName, deployed.Schema);
+
+        return new OrphanedNotificationTrigger(
+            deployed.Schema,
+            deployed.TableName,
+            deployed.FunctionName,
+            deployed.TriggerName,
+            DropStatements:
+            [
+                $"DROP TRIGGER IF EXISTS {delimitedTrigger} ON {delimitedTable}",
+                $"DROP FUNCTION IF EXISTS {delimitedFunction}() CASCADE",
+            ]);
     }
 
     private static IReadOnlyList<NotificationTriggerCandidate> BuildCandidates(IReadOnlyList<NotificationWorkItem> work) =>

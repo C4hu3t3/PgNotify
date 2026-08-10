@@ -61,6 +61,7 @@ internal sealed class PostgresNotificationHostedService(
         state.ConnectionString = ResolveConnectionString(builder);
 
         state.Channels = [.. channelMap.Channels];
+        channelMap.MarkMappingResolved();
 
         logger.LogInformation(
             "PostgreSQL notification mapping resolved: {ChannelCount} channel(s)", state.Channels.Count);
