@@ -74,7 +74,18 @@ internal sealed class NotificationChannelMap
     public void MapChannel(string channel, string entityName, Type entityType)
     {
         _channels.Add(channel);
+        RegisterDispatcher(channel, entityName, entityType);
+    }
 
+    /// <summary>
+    /// As <see cref="MapChannel(string, string, Type)"/>, but without adding <paramref name="channel"/>
+    /// to <see cref="Channels"/> — for a delivery mechanism other than LISTEN/NOTIFY (logical
+    /// replication, via <c>PgNotify.Runtime.Replication</c>'s <c>INotificationPublisher</c>) that
+    /// needs an entity routable by <see cref="Find"/> without the LISTEN/NOTIFY listener also
+    /// LISTENing on a channel nothing will ever NOTIFY.
+    /// </summary>
+    public void RegisterDispatcher(string channel, string entityName, Type entityType)
+    {
         var key = (channel, entityName);
         if (_dispatchers.TryGetValue(key, out var existing))
         {

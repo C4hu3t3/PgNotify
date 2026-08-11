@@ -19,6 +19,8 @@
     <Project Path="src/PgNotify.Listener/PgNotify.Listener.csproj" />
     <Project Path="src/PgNotify.Migrations/PgNotify.Migrations.csproj" />
     <Project Path="src/PgNotify.Runtime.EFCore/PgNotify.Runtime.EFCore.csproj" />
+    <Project Path="src/PgNotify.Runtime.Replication.EFCore/PgNotify.Runtime.Replication.EFCore.csproj" />
+    <Project Path="src/PgNotify.Runtime.Replication/PgNotify.Runtime.Replication.csproj" />
     <Project Path="src/PgNotify.Runtime/PgNotify.Runtime.csproj" />
     <Project Path="src/PgNotify.Writer/PgNotify.Writer.csproj" />
   </Folder>

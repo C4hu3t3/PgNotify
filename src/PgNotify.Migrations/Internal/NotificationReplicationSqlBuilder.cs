@@ -148,13 +148,14 @@ internal sealed class NotificationReplicationSqlBuilder(ISqlGenerationHelper sql
     /// <summary>
     /// Exposed internally so orphan-slot detection can compute the exact same names to check what's
     /// already deployed against what the current model still asks for, mirroring
-    /// <see cref="NotificationTriggerSqlBuilder.GetNames"/>.
+    /// <see cref="NotificationTriggerSqlBuilder.GetNames"/>. Delegates to
+    /// <see cref="NotificationReplicationNames"/>, the single place this formula is written -
+    /// <c>PgNotify.Runtime.Replication</c> needs the exact same names computed from the runtime side.
     /// </summary>
-    internal static string GetPublicationName(string namePrefix) =>
-        PostgresIdentifier.EnsureWithinLength($"{namePrefix}pgnotify_pub");
+    internal static string GetPublicationName(string namePrefix) => NotificationReplicationNames.GetPublicationName(namePrefix);
 
     internal static string GetSlotName(string namePrefix, string consumerGroup) =>
-        PostgresIdentifier.EnsureWithinLength($"{namePrefix}pgnotify_{consumerGroup}");
+        NotificationReplicationNames.GetSlotName(namePrefix, consumerGroup);
 
     private static string Escape(string value) => value.Replace("'", "''");
 }

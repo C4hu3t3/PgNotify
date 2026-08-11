@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Derives PgNotify.Runtime.Replication's entity mapping from the EF Core models of the DbContexts that opted in, so the logical replication listener restates nothing the model already says — the replication counterpart to PgNotify.Runtime.EFCore, kept as its own package so a NOTIFY-only consumer of PgNotify.Runtime.EFCore never pulls in the replication assembly.</Description>
+    <PackageId>PgNotify.Runtime.Replication.EFCore</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.EFCore\PgNotify.EFCore.csproj" />
+    <ProjectReference Include="..\PgNotify.Runtime.Replication\PgNotify.Runtime.Replication.csproj" />
+  </ItemGroup>
+
+</Project>

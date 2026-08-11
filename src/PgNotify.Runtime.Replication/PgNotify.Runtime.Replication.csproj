@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Description>Opt-in at-least-once delivery for PgNotify, via PostgreSQL logical replication instead of LISTEN/NOTIFY: a listener that survives disconnection without losing notifications, at the cost of the operational prerequisites documented on NotificationDeliveryMode.LogicalReplication. Requires PgNotify.Runtime.EFCore's AddReplicationMappingFromDbContexts() (or a custom IReplicationMappingSource) and PgNotify.Migrations having generated the publication/slot DDL. Contains no code shared with the LISTEN/NOTIFY path beyond the public seams (INotificationPublisher) it plugs into.</Description>
+    <PackageId>PgNotify.Runtime.Replication</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PgNotify.Runtime\PgNotify.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

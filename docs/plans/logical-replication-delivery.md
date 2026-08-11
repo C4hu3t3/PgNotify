@@ -201,7 +201,74 @@ LogicalReplication`:
   database-first `EnsureNotificationTriggersAsync()`, can do the actual drop later if this turns
   out to be needed — out of scope for v1.
 
-## Phase 3 — runtime consumer
+## Phase 3 — runtime consumer (implemented, deviates from the plan in several ways)
+
+Built as two new packages rather than one: `PgNotify.Runtime.Replication` (the streaming consumer,
+references only `PgNotify.Runtime` — `Npgsql.Replication` comes along transitively via the
+`Npgsql` package `Runtime` already references, no new external dependency) and
+`PgNotify.Runtime.Replication.EFCore` (the EF Core bridge, mirroring `PgNotify.Runtime.EFCore`).
+Splitting them keeps a NOTIFY-only consumer of `PgNotify.Runtime.EFCore` from ever pulling in the
+replication assembly — the original plan's single `Runtime.EFCore` extension would not have.
+
+Verified end to end against a real `postgres:16-alpine` (not just unit tests): a minimal host with
+`AddPostgresNotifications()` + `AddPostgresLogicalReplication()`, a fake `IReplicationMappingSource`,
+and a real `IDatabaseInsertedHandler`/`IDatabaseUpdatedHandler`/`IDatabaseDeletedHandler` recording
+what it received — insert/update/delete against both a `REPLICA IDENTITY FULL` table (confirms
+`Changed` is populated correctly) and a `DEFAULT` one (confirms `Changed` comes back empty rather
+than crashing, and `KeyDeleteMessage`'s key-only path works).
+
+Deviations from the original plan text below, kept for the reasoning:
+
+- **No new public seam on the shared `NotificationChannelMap`/`NotificationDispatchPipeline`
+  directly.** The plan proposed extending `INotificationMappingSource` or adding a sibling
+  interface directly touching `Runtime`'s internal dispatch types (via `InternalsVisibleTo`, the
+  precedent `PgNotify.Runtime.Tests`/`PgNotify.Benchmarks` already use). Landed instead on a new
+  public `INotificationPublisher` (register an entity under a channel without adding it to the
+  NOTIFY listener's `LISTEN` set; publish an already-built envelope through the same pipeline) —
+  `PgNotify.Runtime.Replication` needs zero `InternalsVisibleTo` access, matching the same "written
+  entirely against the public surface" property `AssemblyInfo.cs` already documents for
+  `Runtime.EFCore`. `NotificationChannelMap` gained one small internal method,
+  `RegisterDispatcher`, factored out of `MapChannel` specifically so `INotificationPublisher`'s
+  registration doesn't also add to the NOTIFY `LISTEN` set. Correspondingly,
+  `ModelNotificationExtensions.GetNotificationChannels()` (the NOTIFY-side channel discovery) now
+  skips `LogicalReplication`-mode entities — nothing would ever `NOTIFY` on that channel, so
+  `LISTEN`ing on it was a permanently-idle subscription.
+- **Payload materialization reuses the existing JSON deserializer instead of building `NotificationEnvelope`
+  fields directly.** `NotificationPayloadJsonMaterializer` (in `PgNotify.Core`, not `Runtime`) walks
+  the same `NotificationEntityConfiguration.BuildPayloadFields()` the trigger SQL builder uses, but
+  against a decoded-column dictionary instead of emitting SQL, producing the *same JSON text* the
+  trigger would have. The replication listener then hands that JSON to whatever
+  `INotificationPayloadDeserializer` is registered (default or a user's own) — the exact one the
+  NOTIFY path uses. This means a replication-delivered `NotificationEnvelope` (and anything built
+  from it, including `ToTyped<T>()`) is structurally identical to a NOTIFY-delivered one for the
+  same configuration, rather than two independently-shaped representations of the same information
+  that could silently drift apart. Proven, not just asserted: 8 unit tests round-trip materialized
+  JSON through `DefaultNotificationPayloadDeserializer` and check the resulting envelope.
+- **No connection-template cloning for a `NpgsqlDataSource`-bound `DbContext`.** The plan carried
+  over `NotificationMappingBuilder.UseConnection`'s template-cloning trick without checking whether
+  it applies. It doesn't: `Npgsql.Replication.LogicalReplicationConnection` isn't an `NpgsqlConnection`
+  at all (a completely separate class hierarchy off `ReplicationConnection`) and has no
+  `CloneWith`-equivalent to carry real credentials from a template into it. `ReplicationMappingBuilder.UseConnection`
+  still derives an adjusted connection *string*, but a `DbContext` bound via
+  `UseNpgsql(NpgsqlDataSource, ...)` (password stripped from its own connection string) needs
+  `PostgresLogicalReplicationOptions.ConnectionString` set explicitly with real credentials instead
+  — documented on the type, not silently broken.
+- **A real, reproducible protocol-ordering bug, found only by the end-to-end run.** `FullUpdateMessage.OldRow`/
+  `.NewRow` are forward-only, single-pass readers directly over the pgoutput wire stream, and the
+  wire format puts the old tuple before the new one on an `UPDATE`. Decoding them in the "obvious"
+  order (new, matching the parameter order most call sites think in first) throws
+  `InvalidOperationException: The row is already been read` on the *next* message, not the one
+  being misread — the corrupted stream position only surfaces one message later. Fixed by always
+  decoding the old tuple first when present, regardless of parameter order. Unit tests cannot catch
+  this class of bug (nothing about the API shape signals the ordering requirement); only running
+  against a real replication stream did. Worth remembering for any future change to this decode
+  path: re-run the end-to-end probe, don't trust that it type-checks.
+- **`RelationMessage` needs no per-connection cache.** The plan assumed one would be needed (WAL
+  relation messages are typically cached by ID in hand-rolled decoders). Unnecessary here:
+  `InsertMessage.Relation`/`UpdateMessage.Relation`/`DeleteMessage.Relation` each already carry
+  their fully-resolved `RelationMessage` directly — Npgsql resolves it internally.
+
+## Phase 3 — original plan text (superseded by "implemented" above; kept for the reasoning trail)
 
 New project `PgNotify.Runtime.Replication` (references `PgNotify.Runtime` only, plus `Npgsql`
 directly for the replication types) — kept separate from `PgNotify.Runtime` so a NOTIFY-only

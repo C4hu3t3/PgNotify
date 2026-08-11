@@ -48,4 +48,29 @@ public static class NotificationConnectionString
             Pooling = false,
         }.ToString();
     }
+
+    /// <summary>
+    /// Returns <paramref name="connectionString"/> adjusted for a dedicated logical replication
+    /// streaming connection: the same <c>Multiplexing</c>/<c>Pooling</c> settings <see cref="ForListening"/>
+    /// turns off, for the same reason — this connection is held open for the listener's lifetime,
+    /// never shared or waited on the way pooled/multiplexed connections expect to be.
+    /// </summary>
+    /// <remarks>
+    /// Deliberately does <b>not</b> add a <c>Replication=...</c> keyword to the connection string:
+    /// confirmed against Npgsql 10 that <c>NpgsqlConnectionStringBuilder</c> does not recognize that
+    /// keyword at all and throws attempting to parse one. <c>Npgsql.Replication.LogicalReplicationConnection</c>
+    /// sets the replication mode itself once opened — this method's job is the same kind of
+    /// correction <see cref="ForListening"/> already makes, not an additive one.
+    /// </remarks>
+    /// <exception cref="ArgumentException"><paramref name="connectionString"/> is null or whitespace.</exception>
+    public static string ForReplication(string connectionString)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(connectionString);
+
+        return new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            Multiplexing = false,
+            Pooling = false,
+        }.ToString();
+    }
 }

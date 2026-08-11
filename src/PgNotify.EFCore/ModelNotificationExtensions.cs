@@ -33,6 +33,18 @@ public static class ModelNotificationExtensions
                 continue;
             }
 
+            // LogicalReplication-configured entities get no trigger at all (see
+            // NotificationDeliveryMode.LogicalReplication), so nothing ever NOTIFYs on the channel
+            // their strategy would compute -- LISTENing on it would just be a permanently-idle
+            // subscription. PgNotify.Runtime.Replication registers these directly against
+            // INotificationPublisher instead, using the exact same channel-naming, so routing stays
+            // identical regardless of delivery mode; only the LISTEN/NOTIFY listener's subscription
+            // set is narrowed here.
+            if (configuration.DeliveryMode != NotificationDeliveryMode.Notify)
+            {
+                continue;
+            }
+
             foreach (var channel in configuration.Operations.Expand()
                          .Select(configuration.GetChannelName)
                          .Distinct(StringComparer.Ordinal))

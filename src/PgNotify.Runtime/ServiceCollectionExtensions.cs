@@ -109,6 +109,7 @@ public static class ServiceCollectionExtensions
         }
 
         services.AddSingleton<NotificationDispatchPipeline>();
+        services.AddSingleton<INotificationPublisher, NotificationPublisher>();
         services.AddHostedService<PostgresNotificationHostedService>();
 
         services.AddHealthChecks().AddCheck<PostgresNotificationHealthCheck>("postgres-notifications");
