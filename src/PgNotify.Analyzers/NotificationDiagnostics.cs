@@ -24,7 +24,7 @@ internal static class NotificationDiagnostics
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "OnUpdate(x => ...) selects columns for the generated trigger's change-detection guard, which only makes sense for scalar properties mapped to a single column.");
+        description: "OnUpdate(x => ...) selects columns for the generated trigger's change-detection guard, which only makes sense for scalar properties mapped to a single column. This is a compile-time heuristic based on the property's CLR type, not the real EF Core model, so it can be wrong for a property whose CLR shape looks like a collection but is mapped to one scalar column anyway (e.g. HasConversion(...) to jsonb, or an owned type projected with ToJson()) - NotificationValidationConvention (PgNotify.EFCore) is the authoritative check, run against the real model at OnModelCreating, and will not be fooled the same way. If this fires on a property you know is scalar, suppress it at that call site (#pragma warning disable PGN002 / restore) rather than trying to work around the analyzer.");
 
     public static readonly DiagnosticDescriptor MissingRuntimeRegistration = new(
         id: "PGN003",
@@ -43,5 +43,5 @@ internal static class NotificationDiagnostics
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true,
-        description: "WithPayload(x => ...) selects columns the generated trigger reads into json_build_object, which only makes sense for scalar properties mapped to a single column.");
+        description: "WithPayload(x => ...) selects columns the generated trigger reads into json_build_object, which only makes sense for scalar properties mapped to a single column. This is a compile-time heuristic based on the property's CLR type, not the real EF Core model, so it can be wrong for a property whose CLR shape looks like a collection but is mapped to one scalar column anyway (e.g. HasConversion(...) to jsonb, or an owned type projected with ToJson()) - NotificationValidationConvention (PgNotify.EFCore) is the authoritative check, run against the real model at OnModelCreating, and will not be fooled the same way. If this fires on a property you know is scalar, suppress it at that call site (#pragma warning disable PGN004 / restore) rather than trying to work around the analyzer.");
 }
