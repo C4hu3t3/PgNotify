@@ -73,6 +73,44 @@ Spike lives as a throwaway console app under the scratchpad, not committed. Reco
 here (or in Phase 3) once run — if any assumption above is wrong, later phases need to change
 accordingly.
 
+### Findings (run against `postgres:16-alpine`, custom command `-c wal_level=logical`)
+
+All four assumptions confirmed, plus one correction that changes Phase 3's confirmation logic
+from "should probably" to "must, or durability silently breaks":
+
+1. `wal_level=logical` takes effect at bootstrap via a container command override; no separate
+   restart step needed in a fresh container (an existing cluster would need one — not exercised
+   here).
+2. A non-superuser role created with plain `... REPLICATION` opened a `LogicalReplicationConnection`
+   and streamed successfully. Note for Phase 3: the connection string must **not** include a
+   `Replication=...` keyword — Npgsql's `NpgsqlConnectionStringBuilder` does not recognize that
+   keyword at all (`ArgumentException: Couldn't set replication`); `LogicalReplicationConnection`'s
+   constructor sets the replication mode itself once opened. `NotificationConnectionString`'s new
+   transform is therefore *not* additive in the way originally planned — it should not add a
+   `replication=database` pair, since doing so breaks the connection string outright.
+3. `SELECT pg_create_logical_replication_slot('name', 'pgoutput')` works over an ordinary
+   connection, confirming slot creation belongs in normal migration SQL as planned.
+4. Reconnecting via `StartReplication` with no `resumeFromLsn` argument resumes from the slot's own
+   `confirmed_flush_lsn` with no client-side persisted state — confirmed by inserting a row while no
+   consumer was attached, then reconnecting and observing only that row replay, not an earlier
+   already-confirmed one.
+
+**Correction found via the same run:** confirming `SetReplicationStatus`/`SendStatusUpdate` using
+an `InsertMessage`'s `WalEnd` and then disconnecting **before** the matching `CommitMessage` does
+not move the server's resumption point past that transaction at all — reconnecting replayed the
+entire transaction from `BeginMessage` again. Confirming using the `CommitMessage`'s `WalEnd`
+instead resumed correctly, skipping the fully-confirmed transaction and only redelivering what
+came after. Logical decoding is transaction-granular: there is no such thing as resuming
+mid-transaction. Phase 3's "confirm only after a commit's notifications have all been dispatched"
+was already the plan; this proves it is not merely the safer choice but the *only* one that works —
+confirming per-row/per-message would silently never advance the resumption point for anything but
+single-statement transactions, which is exactly the kind of gap that would go unnoticed until a
+multi-row transaction hit a restart.
+
+Also observed: `pg_replication_slots.wal_status = reserved` on an idle, unconsumed slot — direct
+confirmation that an orphaned slot pins WAL as described in the Limits/Accepted-costs sections
+below, worth surfacing in the orphan-slot warning's message text in Phase 2.
+
 ## Phase 1 — configuration surface
 
 - `PgNotify.Core`: `NotificationDeliveryMode { Notify (default), LogicalReplication }`.
@@ -134,10 +172,12 @@ listener never pulls in replication connection-mode complexity, same layering re
   exposed through the existing `INotificationMappingSource` extension point (or a sibling
   interface in `PgNotify.Runtime` if the shapes don't fit) — so `Runtime.Replication` stays free of
   any EF Core dependency, same as `Runtime` itself today.
-- `NotificationConnectionString`: new transform (name TBD, e.g. `ForReplication`) that appends
-  `replication=database` — deliberately does **not** reuse `ForListening`'s multiplexing/pooling
-  strip, since a replication connection is never pooled or multiplexed in the first place; the
-  transform's job here is additive, not corrective.
+- `NotificationConnectionString`: new transform (name TBD, e.g. `ForReplication`) — per the Phase 0
+  finding, this must **not** add a `replication=...` keyword (Npgsql's connection string builder
+  rejects it outright; `LogicalReplicationConnection` sets replication mode itself once opened).
+  Its actual job is the same kind of correction `ForListening` already does — strip pooling and
+  multiplexing, since a replication connection is never pooled or multiplexed either — just without
+  the keyword addition originally assumed here.
 - Hosted service loop: `Open` → `IdentifySystem` → `StartReplication(slot, options, ct)` with no
   `resumeFromLsn` (per the Phase 0 spike finding — Postgres already knows where to resume). Cache
   `RelationMessage`s by `RelationId`, drain tuples into column-name→value, filter changed columns
