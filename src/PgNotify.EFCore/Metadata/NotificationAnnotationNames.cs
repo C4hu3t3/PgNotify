@@ -26,6 +26,9 @@ internal static class NotificationAnnotationNames
     public const string PayloadOverflow = Prefix + "PayloadOverflow";
     public const string PayloadColumns = Prefix + "PayloadColumns";
     public const string NamePrefix = Prefix + "NamePrefix";
+    public const string DeliveryMode = Prefix + "DeliveryMode";
+    public const string ReplicaIdentityFull = Prefix + "ReplicaIdentityFull";
+    public const string ReplicationConsumerGroup = Prefix + "ReplicationConsumerGroup";
 
     /// <summary>Model-wide default for <see cref="NamePrefix"/>, set via <c>modelBuilder.HasNotificationNamePrefix(...)</c>.</summary>
     public const string DefaultNamePrefix = Prefix + "DefaultNamePrefix";

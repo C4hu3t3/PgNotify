@@ -79,6 +79,8 @@ public sealed class NotificationValidationConvention : IModelFinalizingConventio
                           + "such property was found on the entity.");
             }
 
+            RejectFilteredUpdateWithoutReplicaIdentity(entityType);
+
             // Resolving the configuration eagerly surfaces custom channel-strategy/payload-builder
             // construction failures (missing parameterless constructor, unloadable type) at model
             // build time instead of at first migration or runtime use.
@@ -178,6 +180,43 @@ public sealed class NotificationValidationConvention : IModelFinalizingConventio
             + $"one type mapped into it, so configure notifications on '{root.DisplayName()}' instead — its trigger fires for "
             + $"every row of the table, including '{entityType.DisplayName()}' rows, which are then reported under the entity "
             + $"name '{root.ShortName()}'. Map '{entityType.DisplayName()}' to its own table if it needs a notification of its own.");
+    }
+
+    /// <summary>
+    /// Under <see cref="NotificationDeliveryMode.LogicalReplication"/>, a filtered
+    /// <c>OnUpdate(x =&gt; new { ... })</c> can only be enforced client-side by comparing the
+    /// replication stream's old and new row values — and the old values only exist on the wire
+    /// when the table's <c>REPLICA IDENTITY</c> is <c>FULL</c>. Under
+    /// <see cref="NotificationDeliveryMode.Notify"/> this has no bearing at all: the trigger's own
+    /// <c>IS DISTINCT FROM</c> guard needs no such setting. Rejected at model-build time rather
+    /// than left to either silently never fire or silently fire on every update.
+    /// </summary>
+    private static void RejectFilteredUpdateWithoutReplicaIdentity(IConventionEntityType entityType)
+    {
+        var deliveryMode = Enum.TryParse<NotificationDeliveryMode>(
+            (string?)entityType.FindAnnotation(NotificationAnnotationNames.DeliveryMode)?.Value,
+            out var mode)
+            ? mode
+            : NotificationDeliveryMode.Notify;
+
+        if (deliveryMode != NotificationDeliveryMode.LogicalReplication)
+        {
+            return;
+        }
+
+        var replicaIdentityFull = entityType.FindAnnotation(NotificationAnnotationNames.ReplicaIdentityFull) is { Value: true };
+        if (replicaIdentityFull || GetWatchedPropertyNames(entityType).Length == 0)
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(
+            $"Entity '{entityType.DisplayName()}' uses NotificationDeliveryMode.LogicalReplication with a filtered "
+            + "OnUpdate(...), but does not opt into WithReplicaIdentityFull(). Under logical replication, filtering is "
+            + "enforced by comparing old and new row values from the replication stream, and old values are only present "
+            + "when the table's REPLICA IDENTITY is FULL — without it, there is nothing to compare a watched property "
+            + "against. Call WithReplicaIdentityFull() (accepting its WAL-volume cost), or drop the property filter to "
+            + "watch every mapped column instead.");
     }
 
     private static string[] GetWatchedPropertyNames(IConventionEntityType entityType) =>

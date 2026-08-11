@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore.Metadata;
+using PgNotify;
 using PgNotify.Metadata;
 using PgNotify.Model;
 using PgNotify.Naming;
@@ -89,6 +90,9 @@ public static class EntityTypeNotificationExtensions
             PayloadBuilder = ResolvePayloadBuilder(entityType),
             PayloadOverflow = ResolvePayloadOverflow(entityType),
             NamePrefix = ResolveNamePrefix(entityType),
+            DeliveryMode = ResolveDeliveryMode(entityType),
+            ReplicaIdentityFull = entityType.FindAnnotation(NotificationAnnotationNames.ReplicaIdentityFull) is { Value: true },
+            ReplicationConsumerGroup = ResolveReplicationConsumerGroup(entityType),
         };
     }
 
@@ -99,6 +103,20 @@ public static class EntityTypeNotificationExtensions
         (string?)entityType.FindAnnotation(NotificationAnnotationNames.NamePrefix)?.Value
         ?? (string?)entityType.Model.FindAnnotation(NotificationAnnotationNames.DefaultNamePrefix)?.Value
         ?? "";
+
+    // Absent on models written before delivery mode was configurable, which must keep the
+    // historical (and only) behavior: a trigger calling pg_notify.
+    private static NotificationDeliveryMode ResolveDeliveryMode(IReadOnlyEntityType entityType) =>
+        Enum.TryParse<NotificationDeliveryMode>(
+            (string?)entityType.FindAnnotation(NotificationAnnotationNames.DeliveryMode)?.Value,
+            out var mode)
+            ? mode
+            : NotificationDeliveryMode.Notify;
+
+    private static string ResolveReplicationConsumerGroup(IReadOnlyEntityType entityType) =>
+        (string?)entityType.FindAnnotation(NotificationAnnotationNames.ReplicationConsumerGroup)?.Value is { Length: > 0 } group
+            ? group
+            : "default";
 
     // Absent on models written before payload overflow was configurable, which must keep the safe
     // behavior rather than the historical one: those triggers could abort a write on a long row.

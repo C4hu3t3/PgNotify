@@ -22,7 +22,10 @@ internal static class NotificationConfigurationWriter
         string? namePrefix = null,
         NotificationPayloadOverflow payloadOverflow = NotificationPayloadOverflow.Truncate,
         IReadOnlyList<string>? payloadProperties = null,
-        bool unconditionalUpdate = false)
+        bool unconditionalUpdate = false,
+        NotificationDeliveryMode deliveryMode = NotificationDeliveryMode.Notify,
+        bool replicaIdentityFull = false,
+        string? replicationConsumerGroup = null)
     {
         // No operations selected means every write to HasDatabaseNotifications()/[NotifyChanges]
         // came from a bare call - defaulting that to All keeps both configuration styles agreeing:
@@ -46,6 +49,9 @@ internal static class NotificationConfigurationWriter
         setAnnotation(NotificationAnnotationNames.NamePrefix, namePrefix);
         setAnnotation(NotificationAnnotationNames.PayloadOverflow, payloadOverflow.ToString());
         setAnnotation(NotificationAnnotationNames.PayloadColumns, string.Join(",", payloadProperties ?? []));
+        setAnnotation(NotificationAnnotationNames.DeliveryMode, deliveryMode.ToString());
+        setAnnotation(NotificationAnnotationNames.ReplicaIdentityFull, replicaIdentityFull);
+        setAnnotation(NotificationAnnotationNames.ReplicationConsumerGroup, replicationConsumerGroup);
     }
 
     public static string SerializeOperations(NotificationOperations operations) =>

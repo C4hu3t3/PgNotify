@@ -68,7 +68,10 @@ public sealed class NotifyChangesAttributeConvention(IDiagnosticsLogger<DbLogger
             namePrefix: attribute.NamePrefix,
             payloadOverflow: attribute.PayloadOverflow,
             payloadProperties: attribute.PayloadProperties ?? [],
-            unconditionalUpdate: !attribute.CompareColumnsOnUpdate);
+            unconditionalUpdate: !attribute.CompareColumnsOnUpdate,
+            deliveryMode: attribute.Delivery,
+            replicaIdentityFull: attribute.ReplicaIdentityFull,
+            replicationConsumerGroup: attribute.ReplicationConsumerGroup);
     }
 
     private static (string Kind, string? Argument) ResolveChannelStrategy(NotifyChangesAttribute attribute, Type clrType)

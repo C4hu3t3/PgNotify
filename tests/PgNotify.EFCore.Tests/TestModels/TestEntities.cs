@@ -146,6 +146,48 @@ public class AttributeWrongPayloadBuilderTypeEntity
     public int Id { get; set; }
 }
 
+/// <summary>
+/// Every logical-replication fluent option set at once — the attribute half of the parity check.
+/// Its fluent twin is <see cref="FluentReplicationEntity"/>.
+/// </summary>
+[NotifyChanges(
+    NotificationOperations.Update,
+    Delivery = NotificationDeliveryMode.LogicalReplication,
+    ReplicaIdentityFull = true,
+    ReplicationConsumerGroup = "billing",
+    WatchedProperties = [nameof(Status)])]
+public class AttributeReplicationEntity
+{
+    public int Id { get; set; }
+
+    public string Status { get; set; } = "";
+}
+
+/// <summary>The fluent twin of <see cref="AttributeReplicationEntity"/>.</summary>
+public class FluentReplicationEntity
+{
+    public int Id { get; set; }
+
+    public string Status { get; set; } = "";
+}
+
+[NotifyChanges(NotificationOperations.Update, Delivery = NotificationDeliveryMode.LogicalReplication)]
+public class AttributeReplicationDefaultConsumerGroupEntity
+{
+    public int Id { get; set; }
+}
+
+[NotifyChanges(
+    NotificationOperations.Update,
+    Delivery = NotificationDeliveryMode.LogicalReplication,
+    WatchedProperties = [nameof(Status)])]
+public class AttributeReplicationFilteredWithoutReplicaIdentityEntity
+{
+    public int Id { get; set; }
+
+    public string Status { get; set; } = "";
+}
+
 public sealed class TestChannelStrategy : INotificationChannelNamingStrategy
 {
     public string GetChannelName(NotificationChannelNamingContext context) => "from_custom_strategy";

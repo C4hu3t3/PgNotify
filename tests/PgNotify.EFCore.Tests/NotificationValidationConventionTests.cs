@@ -38,4 +38,30 @@ public class NotificationValidationConventionTests
 
         act.Should().NotThrow();
     }
+
+    [Fact]
+    public void Filtered_OnUpdate_under_LogicalReplication_without_ReplicaIdentityFull_throws_at_model_build_time()
+    {
+        var act = () => ConventionDbContext.BuildModel(mb =>
+            mb.Entity<AttributeReplicationFilteredWithoutReplicaIdentityEntity>());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*WithReplicaIdentityFull*");
+    }
+
+    [Fact]
+    public void Filtered_OnUpdate_under_LogicalReplication_with_ReplicaIdentityFull_does_not_throw()
+    {
+        var act = () => ConventionDbContext.BuildModel(mb => mb.Entity<AttributeReplicationEntity>());
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void Unfiltered_OnUpdate_under_LogicalReplication_does_not_require_ReplicaIdentityFull()
+    {
+        var act = () => ConventionDbContext.BuildModel(mb =>
+            mb.Entity<AttributeReplicationDefaultConsumerGroupEntity>());
+
+        act.Should().NotThrow();
+    }
 }

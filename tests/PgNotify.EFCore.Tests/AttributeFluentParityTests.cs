@@ -169,6 +169,61 @@ public class AttributeFluentParityTests
     }
 
     [Fact]
+    public void Delivery_ReplicaIdentityFull_and_ConsumerGroup_write_identical_annotations()
+    {
+        var model = ConventionDbContext.BuildModel(mb =>
+        {
+            mb.Entity<AttributeReplicationEntity>();
+            mb.Entity<FluentReplicationEntity>().HasDatabaseNotifications(o => o
+                .OnUpdate(x => x.Status)
+                .WithDelivery(NotificationDeliveryMode.LogicalReplication, "billing")
+                .WithReplicaIdentityFull());
+        });
+
+        var fromAttribute = NotificationAnnotations(model.FindEntityType(typeof(AttributeReplicationEntity))!);
+        var fromFluent = NotificationAnnotations(model.FindEntityType(typeof(FluentReplicationEntity))!);
+
+        fromAttribute.Should().NotBeEmpty();
+        fromAttribute.Should().BeEquivalentTo(fromFluent);
+    }
+
+    [Fact]
+    public void Replication_config_resolves_delivery_mode_replica_identity_and_consumer_group()
+    {
+        var config = ConventionDbContext
+            .BuildModel(mb => mb.Entity<AttributeReplicationEntity>())
+            .FindEntityType(typeof(AttributeReplicationEntity))!
+            .GetNotificationConfiguration()!;
+
+        config.DeliveryMode.Should().Be(NotificationDeliveryMode.LogicalReplication);
+        config.ReplicaIdentityFull.Should().BeTrue();
+        config.ReplicationConsumerGroup.Should().Be("billing");
+    }
+
+    [Fact]
+    public void ConsumerGroup_defaults_to_default_when_unset()
+    {
+        var config = ConventionDbContext
+            .BuildModel(mb => mb.Entity<AttributeReplicationDefaultConsumerGroupEntity>())
+            .FindEntityType(typeof(AttributeReplicationDefaultConsumerGroupEntity))!
+            .GetNotificationConfiguration()!;
+
+        config.ReplicationConsumerGroup.Should().Be("default");
+    }
+
+    [Fact]
+    public void Entities_without_delivery_configured_default_to_Notify()
+    {
+        var config = ConventionDbContext
+            .BuildModel(mb => mb.Entity<AttributeUser>())
+            .FindEntityType(typeof(AttributeUser))!
+            .GetNotificationConfiguration()!;
+
+        config.DeliveryMode.Should().Be(NotificationDeliveryMode.Notify);
+        config.ReplicaIdentityFull.Should().BeFalse();
+    }
+
+    [Fact]
     public void Both_styles_converge_an_explicit_empty_operation_set_to_All()
     {
         // [NotifyChanges(NotificationOperations.None)] used to persist None untouched, unlike a bare

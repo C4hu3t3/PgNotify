@@ -106,4 +106,27 @@ public sealed class NotifyChangesAttribute(NotificationOperations operations = N
     /// Defaults to <see cref="NotificationPayloadOverflow.Truncate"/>.
     /// </summary>
     public NotificationPayloadOverflow PayloadOverflow { get; set; } = NotificationPayloadOverflow.Truncate;
+
+    /// <summary>
+    /// How this entity's changes reach a listener. Defaults to
+    /// <see cref="NotificationDeliveryMode.Notify"/> — see
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/> for what changes when set to it,
+    /// including its operational prerequisites. The attribute form of <c>WithDelivery(...)</c>.
+    /// </summary>
+    public NotificationDeliveryMode Delivery { get; set; } = NotificationDeliveryMode.Notify;
+
+    /// <summary>
+    /// Only meaningful with <see cref="Delivery"/> set to
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/>: the attribute form of
+    /// <c>WithReplicaIdentityFull()</c>.
+    /// </summary>
+    public bool ReplicaIdentityFull { get; set; }
+
+    /// <summary>
+    /// Only meaningful with <see cref="Delivery"/> set to
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/>: the attribute form of
+    /// <c>WithDelivery(...)</c>'s <c>consumerGroup</c> parameter. Defaults to <c>"default"</c>
+    /// when unset.
+    /// </summary>
+    public string? ReplicationConsumerGroup { get; set; }
 }

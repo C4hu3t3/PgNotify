@@ -78,6 +78,32 @@ public sealed record NotificationEntityConfiguration
     /// </summary>
     public string NamePrefix { get; init; } = "";
 
+    /// <summary>
+    /// How this entity's changes reach a listener. <see cref="NotificationDeliveryMode.Notify"/>
+    /// (the default) generates a trigger calling <c>pg_notify</c>;
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/> generates a publication/slot
+    /// instead, and no trigger at all — see <c>docs/plans/logical-replication-delivery.md</c>.
+    /// </summary>
+    public NotificationDeliveryMode DeliveryMode { get; init; } = NotificationDeliveryMode.Notify;
+
+    /// <summary>
+    /// Only meaningful under <see cref="NotificationDeliveryMode.LogicalReplication"/>: sets the
+    /// table's <c>REPLICA IDENTITY</c> to <c>FULL</c> so an <c>UPDATE</c>'s old column values are
+    /// available to the replication stream. Required for <see cref="WatchedUpdateColumns"/> to be
+    /// enforceable under this delivery mode — without it there is no old row to compare against.
+    /// Increases WAL volume; off by default.
+    /// </summary>
+    public bool ReplicaIdentityFull { get; init; }
+
+    /// <summary>
+    /// Only meaningful under <see cref="NotificationDeliveryMode.LogicalReplication"/>: names the
+    /// replication slot's consumer group. A slot supports exactly one active stream, so distinct
+    /// consumer groups reading the same tables need distinct slot names — this is how independent
+    /// listener processes each see every change, the durable equivalent of NOTIFY's fan-out.
+    /// Defaults to <c>"default"</c> when unset.
+    /// </summary>
+    public string ReplicationConsumerGroup { get; init; } = "default";
+
     /// <summary>Resolves the channel name for a specific operation, honoring <see cref="ChannelNameOverride"/> first.</summary>
     public string GetChannelName(NotificationOperation operation)
     {

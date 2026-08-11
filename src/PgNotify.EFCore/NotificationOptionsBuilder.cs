@@ -25,6 +25,9 @@ public sealed class NotificationOptionsBuilder<TEntity>
     private string? _namePrefix;
     private NotificationPayloadOverflow _payloadOverflow = NotificationPayloadOverflow.Truncate;
     private readonly List<string> _payloadProperties = [];
+    private NotificationDeliveryMode _deliveryMode = NotificationDeliveryMode.Notify;
+    private bool _replicaIdentityFull;
+    private string? _replicationConsumerGroup;
 
     internal NotificationOptionsBuilder()
     {
@@ -238,6 +241,40 @@ public sealed class NotificationOptionsBuilder<TEntity>
         return this;
     }
 
+    /// <summary>
+    /// Chooses how this entity's changes reach a listener.
+    /// <see cref="NotificationDeliveryMode.Notify"/> (the default) is the trigger/<c>pg_notify</c>
+    /// path this library has always used. <see cref="NotificationDeliveryMode.LogicalReplication"/>
+    /// reads changes from a replication slot instead — no trigger is generated for this entity —
+    /// trading NOTIFY's fire-and-forget delivery for at-least-once, at the cost of the operational
+    /// prerequisites documented on <see cref="NotificationDeliveryMode.LogicalReplication"/>.
+    /// <paramref name="consumerGroup"/> only matters for that mode: it names the replication slot,
+    /// so independent listener processes that each need to see every change use distinct groups —
+    /// the durable equivalent of NOTIFY's fan-out. Defaults to <c>"default"</c>.
+    /// </summary>
+    public NotificationOptionsBuilder<TEntity> WithDelivery(NotificationDeliveryMode mode, string? consumerGroup = null)
+    {
+        _deliveryMode = mode;
+        _replicationConsumerGroup = consumerGroup;
+        return this;
+    }
+
+    /// <summary>
+    /// Sets this entity's table to <c>REPLICA IDENTITY FULL</c>, so an <c>UPDATE</c>'s old column
+    /// values are available under <see cref="NotificationDeliveryMode.LogicalReplication"/> — only
+    /// meaningful there, and only needed when combined with a filtered
+    /// <see cref="OnUpdate(Expression{Func{TEntity, object}})"/>: without old values there is
+    /// nothing to compare a watched property against, so the model fails to build instead of
+    /// silently never firing (under <see cref="NotificationDeliveryMode.Notify"/> the trigger's own
+    /// <c>IS DISTINCT FROM</c> guard needs no such setting). Increases WAL volume for every write to
+    /// the table, not only ones this library reads — off by default.
+    /// </summary>
+    public NotificationOptionsBuilder<TEntity> WithReplicaIdentityFull()
+    {
+        _replicaIdentityFull = true;
+        return this;
+    }
+
     internal void Save(EntityTypeBuilder<TEntity> entityTypeBuilder)
     {
         NotificationConfigurationWriter.Apply(
@@ -252,6 +289,9 @@ public sealed class NotificationOptionsBuilder<TEntity>
             _namePrefix,
             _payloadOverflow,
             _payloadProperties,
-            _unconditionalUpdate);
+            _unconditionalUpdate,
+            _deliveryMode,
+            _replicaIdentityFull,
+            _replicationConsumerGroup);
     }
 }
