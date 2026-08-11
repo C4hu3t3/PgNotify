@@ -87,6 +87,44 @@ public class NotificationConfigurationAnalyzerTests
     }
 
     [Fact]
+    public async Task PGN002_fires_when_OnAny_selects_a_collection_navigation()
+    {
+        var source = Preamble + """
+
+            public class SampleContext : DbContext
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    modelBuilder.Entity<User>().HasDatabaseNotifications(o => o.OnAny(x => x.Orders));
+                }
+            }
+            """;
+
+        var diagnostics = await CompilationTestHelper.GetDiagnosticsAsync(source);
+
+        diagnostics.Should().ContainSingle(d => d.Id == "PGN002");
+    }
+
+    [Fact]
+    public async Task PGN002_does_not_fire_for_OnAny_with_a_bool_argument()
+    {
+        var source = Preamble + """
+
+            public class SampleContext : DbContext
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    modelBuilder.Entity<User>().HasDatabaseNotifications(o => o.OnAny(false));
+                }
+            }
+            """;
+
+        var diagnostics = await CompilationTestHelper.GetDiagnosticsAsync(source);
+
+        diagnostics.Should().NotContain(d => d.Id == "PGN002");
+    }
+
+    [Fact]
     public async Task PGN002_does_not_fire_for_a_scalar_property()
     {
         var source = Preamble + """

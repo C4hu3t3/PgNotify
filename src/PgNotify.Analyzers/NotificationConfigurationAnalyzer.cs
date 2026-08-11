@@ -33,6 +33,7 @@ public sealed class NotificationConfigurationAnalyzer : DiagnosticAnalyzer
     private const string NotifyChangesAttributeMetadataName = "PgNotify.NotifyChangesAttribute";
     private const string HasDatabaseNotificationsMethodName = "HasDatabaseNotifications";
     private const string OnUpdateMethodName = "OnUpdate";
+    private const string OnAnyMethodName = "OnAny";
     private const string WithPayloadMethodName = "WithPayload";
     private const string AddPostgresNotificationsMethodName = "AddPostgresNotifications";
     private const string NotificationOptionsBuilderTypeName = "NotificationOptionsBuilder";
@@ -98,7 +99,10 @@ public sealed class NotificationConfigurationAnalyzer : DiagnosticAnalyzer
                 AnalyzeHasDatabaseNotifications(state, methodSymbol, invocation);
                 break;
 
-            case OnUpdateMethodName when methodSymbol.ContainingType?.Name == NotificationOptionsBuilderTypeName:
+            // OnAny(x => ...) forwards its selector straight into the same update-watch guard
+            // OnUpdate(x => ...) builds, so it is exactly as vulnerable to selecting a
+            // navigation/collection property and gets the same check.
+            case OnUpdateMethodName or OnAnyMethodName when methodSymbol.ContainingType?.Name == NotificationOptionsBuilderTypeName:
                 AnalyzeSelectedProperties(context, invocation, NotificationDiagnostics.UnsupportedWatchedProperty);
                 break;
 

@@ -102,6 +102,66 @@ public class NotificationsSqlGenerationTests
     }
 
     [Fact]
+    public void OnAny_true_is_identical_to_chaining_all_three_operations_with_OnUpdate_true()
+    {
+        var viaOnAny = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnAny(true)));
+        var viaChain = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o =>
+            {
+                o.OnInsert();
+                o.OnUpdate(true);
+                o.OnDelete();
+            }));
+
+        viaOnAny.Should().Equal(viaChain);
+    }
+
+    [Fact]
+    public void OnAny_defaults_to_true()
+    {
+        var viaDefault = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnAny()));
+        var viaExplicitTrue = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnAny(true)));
+
+        viaDefault.Should().Equal(viaExplicitTrue);
+    }
+
+    [Fact]
+    public void OnAny_false_makes_every_operation_unconditional()
+    {
+        var sql = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnAny(false)));
+
+        var combined = string.Join("\n", sql);
+
+        combined.Should().Contain("AFTER INSERT OR UPDATE OR DELETE ON");
+        combined.Should().Contain("IF TG_OP = 'UPDATE' THEN\n        PERFORM pg_notify(");
+        combined.Should().NotContain("IS DISTINCT FROM");
+    }
+
+    [Fact]
+    public void OnAny_with_a_selector_watches_only_those_columns_on_the_update_branch()
+    {
+        var viaOnAny = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnAny(x => x.Name)));
+        var viaChain = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o =>
+            {
+                o.OnInsert();
+                o.OnUpdate(x => x.Name);
+                o.OnDelete();
+            }));
+
+        viaOnAny.Should().Equal(viaChain);
+
+        var combined = string.Join("\n", viaOnAny);
+        combined.Should().Contain("NEW.\"Name\" IS DISTINCT FROM OLD.\"Name\"");
+        combined.Should().NotContain("NEW.\"Sku\" IS DISTINCT FROM OLD.\"Sku\"");
+    }
+
+    [Fact]
     public void Minimal_payload_uses_id_field_for_single_column_key()
     {
         var sql = MigrationTestHelper.GenerateCreateSql(mb =>

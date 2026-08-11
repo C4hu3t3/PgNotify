@@ -78,6 +78,36 @@ public sealed class NotificationOptionsBuilder<TEntity>
         return this;
     }
 
+    /// <summary>
+    /// Raise a notification for every operation — the same as calling <see cref="OnInsert"/>,
+    /// <see cref="OnUpdate(Expression{Func{TEntity, object}})"/> and <see cref="OnDelete"/>
+    /// together. <paramref name="watchedProperties"/> has the same meaning as on
+    /// <see cref="OnUpdate(Expression{Func{TEntity, object}})"/> and only affects the update
+    /// branch: insert and delete have no "before" row for a property selector to compare against.
+    /// </summary>
+    public NotificationOptionsBuilder<TEntity> OnAny(Expression<Func<TEntity, object?>>? watchedProperties = null)
+    {
+        OnInsert();
+        OnUpdate(watchedProperties);
+        OnDelete();
+        return this;
+    }
+
+    /// <summary>
+    /// Raise a notification for every operation — the same as calling <see cref="OnInsert"/>,
+    /// <see cref="OnUpdate(bool)"/> and <see cref="OnDelete"/> together.
+    /// <paramref name="compareColumns"/> has the same meaning as on <see cref="OnUpdate(bool)"/>
+    /// and only affects the update branch: insert and delete have no "before" row to compare
+    /// against, so there is nothing for it to change there.
+    /// </summary>
+    public NotificationOptionsBuilder<TEntity> OnAny(bool compareColumns)
+    {
+        OnInsert();
+        OnUpdate(compareColumns);
+        OnDelete();
+        return this;
+    }
+
     /// <summary>Uses a custom channel-naming strategy type, constructed with its public parameterless constructor.</summary>
     public NotificationOptionsBuilder<TEntity> WithChannelStrategy<TStrategy>()
         where TStrategy : INotificationChannelNamingStrategy, new()
