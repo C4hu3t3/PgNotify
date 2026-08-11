@@ -76,6 +76,32 @@ public class NotificationsSqlGenerationTests
     }
 
     [Fact]
+    public void OnUpdate_true_is_identical_to_the_bare_call()
+    {
+        var explicitTrue = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate(true)));
+        var bare = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate()));
+
+        explicitTrue.Should().Equal(bare);
+    }
+
+    [Fact]
+    public void OnUpdate_false_raises_unconditionally_without_comparing_any_column()
+    {
+        var sql = MigrationTestHelper.GenerateCreateSql(mb =>
+            mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate(false)));
+
+        var combined = string.Join("\n", sql);
+
+        // No IS DISTINCT FROM guard, and no pointless "IF TRUE THEN" wrapper either - the
+        // notification is unconditional, same shape as the INSERT/DELETE branches.
+        combined.Should().Contain("IF TG_OP = 'UPDATE' THEN\n        PERFORM pg_notify(");
+        combined.Should().NotContain("IS DISTINCT FROM");
+        combined.Should().NotContain("IF TRUE THEN");
+    }
+
+    [Fact]
     public void Minimal_payload_uses_id_field_for_single_column_key()
     {
         var sql = MigrationTestHelper.GenerateCreateSql(mb =>

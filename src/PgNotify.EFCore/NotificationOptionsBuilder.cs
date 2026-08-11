@@ -16,6 +16,7 @@ public sealed class NotificationOptionsBuilder<TEntity>
 {
     private NotificationOperations _operations = NotificationOperations.None;
     private readonly List<string> _watchedUpdateProperties = [];
+    private bool _unconditionalUpdate;
     private string _channelStrategyKind = NotificationChannelStrategyKind.PerEntity;
     private string? _channelStrategyArgument;
     private string? _channelNameOverride;
@@ -47,16 +48,33 @@ public sealed class NotificationOptionsBuilder<TEntity>
     /// Raise a notification after a row is updated. If <paramref name="watchedProperties"/> is
     /// given (e.g. <c>x =&gt; new { x.Name, x.Email }</c>), the trigger only fires when one of
     /// those specific properties actually changed (compared with <c>IS DISTINCT FROM</c>);
-    /// otherwise any mapped column change fires it.
+    /// otherwise any mapped column change fires it. See the <see cref="OnUpdate(bool)"/> overload
+    /// to raise a notification for every <c>UPDATE</c>, including one that changes no value.
     /// </summary>
     public NotificationOptionsBuilder<TEntity> OnUpdate(Expression<Func<TEntity, object?>>? watchedProperties = null)
     {
         _operations |= NotificationOperations.Update;
         if (watchedProperties is not null)
         {
+            _unconditionalUpdate = false;
             _watchedUpdateProperties.AddRange(PropertySelectorExpressionHelper.GetPropertyNames(watchedProperties));
         }
 
+        return this;
+    }
+
+    /// <summary>
+    /// Raise a notification after a row is updated. <paramref name="compareColumns"/> =
+    /// <see langword="true"/> is the same as the bare <c>OnUpdate()</c> call: the
+    /// trigger only fires when at least one mapped column actually changed value (compared with
+    /// <c>IS DISTINCT FROM</c>). <paramref name="compareColumns"/> = <see langword="false"/> skips
+    /// that comparison entirely — every <c>UPDATE</c> statement that touches the row raises a
+    /// notification, including one that changes no value.
+    /// </summary>
+    public NotificationOptionsBuilder<TEntity> OnUpdate(bool compareColumns)
+    {
+        _operations |= NotificationOperations.Update;
+        _unconditionalUpdate = !compareColumns;
         return this;
     }
 
@@ -203,6 +221,7 @@ public sealed class NotificationOptionsBuilder<TEntity>
             _payloadBuilderTypeName,
             _namePrefix,
             _payloadOverflow,
-            _payloadProperties);
+            _payloadProperties,
+            _unconditionalUpdate);
     }
 }

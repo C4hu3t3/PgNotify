@@ -21,7 +21,8 @@ internal static class NotificationConfigurationWriter
         string? payloadBuilderTypeName,
         string? namePrefix = null,
         NotificationPayloadOverflow payloadOverflow = NotificationPayloadOverflow.Truncate,
-        IReadOnlyList<string>? payloadProperties = null)
+        IReadOnlyList<string>? payloadProperties = null,
+        bool unconditionalUpdate = false)
     {
         // No operations selected means every write to HasDatabaseNotifications()/[NotifyChanges]
         // came from a bare call - defaulting that to All keeps both configuration styles agreeing:
@@ -36,6 +37,7 @@ internal static class NotificationConfigurationWriter
         setAnnotation(NotificationAnnotationNames.Enabled, true);
         setAnnotation(NotificationAnnotationNames.Operations, SerializeOperations(operations));
         setAnnotation(NotificationAnnotationNames.WatchedUpdateColumns, string.Join(",", watchedUpdateProperties));
+        setAnnotation(NotificationAnnotationNames.UnconditionalUpdate, unconditionalUpdate);
         setAnnotation(NotificationAnnotationNames.ChannelStrategyKind, channelStrategyKind);
         setAnnotation(NotificationAnnotationNames.ChannelStrategyArgument, channelStrategyArgument);
         setAnnotation(NotificationAnnotationNames.ChannelNameOverride, channelNameOverride);

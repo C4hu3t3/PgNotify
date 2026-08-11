@@ -30,9 +30,19 @@ public sealed record NotificationEntityConfiguration
 
     /// <summary>
     /// The column names to watch for <c>OnUpdate</c>. Empty means "any mapped column change"
-    /// (an unfiltered <c>UPDATE</c> trigger).
+    /// (an unfiltered <c>UPDATE</c> trigger) — unless <see cref="UnconditionalUpdate"/> is set,
+    /// which means no column is compared at all.
     /// </summary>
     public IReadOnlyList<string> WatchedUpdateColumns { get; init; } = [];
+
+    /// <summary>
+    /// When <see langword="true"/>, the generated trigger raises an update notification for every
+    /// <c>UPDATE</c> statement that touches the row, without comparing any column with
+    /// <c>IS DISTINCT FROM</c> first — including a no-op update that changes no value. The fluent
+    /// API's <c>OnUpdate(false)</c>; defaults to <see langword="false"/>, which is every other
+    /// <c>OnUpdate</c> shape (bare, or with an explicit property selector).
+    /// </summary>
+    public bool UnconditionalUpdate { get; init; }
 
     /// <summary>The strategy used to compute the channel name, unless overridden by <see cref="ChannelNameOverride"/>.</summary>
     public required INotificationChannelNamingStrategy ChannelStrategy { get; init; }

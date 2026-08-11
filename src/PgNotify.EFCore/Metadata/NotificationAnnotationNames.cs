@@ -17,6 +17,7 @@ internal static class NotificationAnnotationNames
     public const string Enabled = Prefix + "Enabled";
     public const string Operations = Prefix + "Operations";
     public const string WatchedUpdateColumns = Prefix + "WatchedUpdateColumns";
+    public const string UnconditionalUpdate = Prefix + "UnconditionalUpdate";
     public const string ChannelStrategyKind = Prefix + "ChannelStrategyKind";
     public const string ChannelStrategyArgument = Prefix + "ChannelStrategyArgument";
     public const string ChannelNameOverride = Prefix + "ChannelNameOverride";

@@ -46,6 +46,16 @@ public sealed class NotifyChangesAttribute(NotificationOperations operations = N
     public string[]? WatchedProperties { get; set; }
 
     /// <summary>
+    /// The attribute form of <c>OnUpdate(false)</c>. Set to <see langword="false"/> to raise an
+    /// update notification for every <c>UPDATE</c> statement that touches the row, without
+    /// comparing any column first — including one that changes no value. Defaults to
+    /// <see langword="true"/>, which only fires when a mapped column actually changed. Setting
+    /// this to <see langword="false"/> together with <see cref="WatchedProperties"/> fails when
+    /// the model is built: there is nothing to compare once comparison is turned off.
+    /// </summary>
+    public bool CompareColumnsOnUpdate { get; set; } = true;
+
+    /// <summary>
     /// Which built-in payload shape the trigger emits. Defaults to
     /// <see cref="NotificationPayloadKind.Minimal"/>, as the fluent API does.
     /// </summary>

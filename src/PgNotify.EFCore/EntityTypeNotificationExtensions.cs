@@ -82,6 +82,7 @@ public static class EntityTypeNotificationExtensions
             Operations = operations,
             KeyColumns = keyColumns,
             WatchedUpdateColumns = watchedColumns,
+            UnconditionalUpdate = entityType.FindAnnotation(NotificationAnnotationNames.UnconditionalUpdate) is { Value: true },
             ChannelStrategy = ResolveChannelStrategy(entityType),
             ChannelNameOverride = (string?)entityType.FindAnnotation(NotificationAnnotationNames.ChannelNameOverride)?.Value,
             PayloadColumns = payloadColumns,

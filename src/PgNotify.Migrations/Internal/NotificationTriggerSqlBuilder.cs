@@ -72,7 +72,15 @@ internal sealed class NotificationTriggerSqlBuilder(ISqlGenerationHelper sqlGene
         IReadOnlyDictionary<string, string> columnStoreTypes)
     {
         var (functionName, _) = GetNames(config.Schema, config.TableName, config.NamePrefix);
-        var effectiveWatchedColumns = config.WatchedUpdateColumns.Count > 0 ? config.WatchedUpdateColumns : allTableColumns;
+
+        // UnconditionalUpdate resolves to an empty column list: BuildChangedArrayExpression's "no
+        // columns -> empty array" branch already says exactly what an unconditional update means
+        // for the payload's "changed" field (no comparison happened, so nothing is reported as
+        // changed). The guard itself is skipped entirely below rather than built from this empty
+        // list - see the "IF <guard> THEN" branch, guarded on !config.UnconditionalUpdate.
+        var effectiveWatchedColumns = config.UnconditionalUpdate
+            ? []
+            : config.WatchedUpdateColumns.Count > 0 ? config.WatchedUpdateColumns : allTableColumns;
         var fields = config.BuildPayloadFields();
         var guardsOverflow = GuardsOverflow(config);
 
@@ -91,7 +99,7 @@ internal sealed class NotificationTriggerSqlBuilder(ISqlGenerationHelper sqlGene
             body.Append("    ").Append(first ? "IF" : "ELSIF").Append(" TG_OP = '").Append(operation.ToSqlKeyword()).AppendLine("' THEN");
             first = false;
 
-            if (operation == NotificationOperation.Update)
+            if (operation == NotificationOperation.Update && !config.UnconditionalUpdate)
             {
                 var guard = BuildUpdateGuardExpression(effectiveWatchedColumns, columnStoreTypes);
                 body.Append("        IF ").Append(guard).AppendLine(" THEN");
@@ -226,8 +234,10 @@ internal sealed class NotificationTriggerSqlBuilder(ISqlGenerationHelper sqlGene
             args.Add(field.Kind switch
             {
                 NotificationPayloadFieldKind.Constant => $"'{Escape(field.ConstantValue ?? string.Empty)}'::text",
-                NotificationPayloadFieldKind.Operation =>
-                    "(CASE TG_OP WHEN 'INSERT' THEN 'created' WHEN 'UPDATE' THEN 'updated' ELSE 'deleted' END)",
+                // The generated function branches on TG_OP itself (one IF/ELSIF per operation), so
+                // which operation this expression is for is already known here at generation time -
+                // no need to ask Postgres to re-derive it per row with a CASE TG_OP.
+                NotificationPayloadFieldKind.Operation => $"'{Escape(operation.ToPastTenseWord())}'::text",
                 NotificationPayloadFieldKind.Schema => $"'{Escape(config.Schema ?? string.Empty)}'::text",
                 NotificationPayloadFieldKind.Table => $"'{Escape(config.TableName)}'::text",
                 NotificationPayloadFieldKind.Column => $"{recordAlias}.{sqlGenerationHelper.DelimitIdentifier(field.ColumnName!)}",
@@ -270,16 +280,13 @@ internal sealed class NotificationTriggerSqlBuilder(ISqlGenerationHelper sqlGene
         return $"ARRAY(SELECT t.col FROM (VALUES {string.Join(", ", rows)}) AS t(col, changed) WHERE t.changed)";
     }
 
-    private string BuildUpdateGuardExpression(IReadOnlyList<string> watchedColumns, IReadOnlyDictionary<string, string> columnStoreTypes)
-    {
-        if (watchedColumns.Count == 0)
-        {
-            return "TRUE";
-        }
-
-        var checks = watchedColumns.Select(col => $"({BuildDistinctFromExpression(col, columnStoreTypes)})");
-        return string.Join(" OR ", checks);
-    }
+    /// <summary>
+    /// Its only caller skips calling this entirely for an unconditional update (see the
+    /// <c>!config.UnconditionalUpdate</c> check around its call site), so <paramref name="watchedColumns"/>
+    /// is always non-empty here: either an explicit watch list or every mapped column.
+    /// </summary>
+    private string BuildUpdateGuardExpression(IReadOnlyList<string> watchedColumns, IReadOnlyDictionary<string, string> columnStoreTypes) =>
+        string.Join(" OR ", watchedColumns.Select(col => $"({BuildDistinctFromExpression(col, columnStoreTypes)})"));
 
     /// <summary>
     /// A <c>NEW.col IS DISTINCT FROM OLD.col</c> comparison, casting both sides first for store

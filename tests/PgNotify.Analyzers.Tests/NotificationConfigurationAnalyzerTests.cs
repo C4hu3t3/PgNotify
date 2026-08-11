@@ -125,6 +125,25 @@ public class NotificationConfigurationAnalyzerTests
     }
 
     [Fact]
+    public async Task PGN002_does_not_fire_for_OnUpdate_with_a_bool_argument()
+    {
+        var source = Preamble + """
+
+            public class SampleContext : DbContext
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    modelBuilder.Entity<User>().HasDatabaseNotifications(o => o.OnUpdate(false));
+                }
+            }
+            """;
+
+        var diagnostics = await CompilationTestHelper.GetDiagnosticsAsync(source);
+
+        diagnostics.Should().NotContain(d => d.Id == "PGN002");
+    }
+
+    [Fact]
     public async Task PGN004_fires_when_WithPayload_projects_a_collection_navigation()
     {
         var source = Preamble + """

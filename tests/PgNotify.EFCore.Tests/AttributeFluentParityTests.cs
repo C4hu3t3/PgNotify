@@ -124,6 +124,51 @@ public class AttributeFluentParityTests
     }
 
     [Fact]
+    public void CompareColumnsOnUpdate_false_and_OnUpdate_false_write_identical_annotations()
+    {
+        var model = ConventionDbContext.BuildModel(mb =>
+        {
+            mb.Entity<AttributeUnconditionalUpdateEntity>();
+            mb.Entity<FluentUnconditionalUpdateEntity>().HasDatabaseNotifications(o => o.OnUpdate(false));
+        });
+
+        var fromAttribute = NotificationAnnotations(model.FindEntityType(typeof(AttributeUnconditionalUpdateEntity))!);
+        var fromFluent = NotificationAnnotations(model.FindEntityType(typeof(FluentUnconditionalUpdateEntity))!);
+
+        fromAttribute.Should().NotBeEmpty();
+        fromAttribute.Should().BeEquivalentTo(fromFluent);
+    }
+
+    [Fact]
+    public void OnUpdate_false_config_has_no_watched_columns_and_is_unconditional()
+    {
+        var config = ConventionDbContext
+            .BuildModel(mb => mb.Entity<AttributeUnconditionalUpdateEntity>())
+            .FindEntityType(typeof(AttributeUnconditionalUpdateEntity))!
+            .GetNotificationConfiguration()!;
+
+        config.UnconditionalUpdate.Should().BeTrue();
+        config.WatchedUpdateColumns.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Setting_CompareColumnsOnUpdate_false_and_WatchedProperties_at_once_does_not_throw_and_ignores_WatchedProperties()
+    {
+        // Contradictory, but not fatal: CompareColumnsOnUpdate = false already means "watch no
+        // columns" on its own, so a leftover WatchedProperties value is just noise to warn about
+        // (see NotifyChangesAttributeConvention, which logs via NotificationLoggerExtensions),
+        // not a reason to fail the whole model build.
+        var act = () => ConventionDbContext
+            .BuildModel(mb => mb.Entity<AttributeConflictingCompareColumnsEntity>())
+            .FindEntityType(typeof(AttributeConflictingCompareColumnsEntity))!
+            .GetNotificationConfiguration()!;
+
+        var config = act.Should().NotThrow().Subject;
+        config.UnconditionalUpdate.Should().BeTrue();
+        config.WatchedUpdateColumns.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Both_styles_converge_an_explicit_empty_operation_set_to_All()
     {
         // [NotifyChanges(NotificationOperations.None)] used to persist None untouched, unlike a bare

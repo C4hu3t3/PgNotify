@@ -66,6 +66,20 @@ public class NotificationRegenerationTests
     }
 
     [Fact]
+    public void Switching_to_an_unconditional_update_regenerates_the_trigger()
+    {
+        // No column, key or constraint changes here either - going from "compare every column" to
+        // "no comparison at all" only changes what the trigger body's UPDATE branch contains,
+        // which only the fingerprint can see.
+        var sql = string.Join("\n", MigrationTestHelper.GenerateDiffSql(
+            before: mb => mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate()),
+            after: mb => mb.Entity<Product>().HasDatabaseNotifications(o => o.OnUpdate(false))));
+
+        sql.Should().Contain("CREATE OR REPLACE FUNCTION");
+        sql.Should().NotContain("IS DISTINCT FROM");
+    }
+
+    [Fact]
     public void Changing_only_the_payload_shape_regenerates_the_trigger()
     {
         // No column, key or constraint changes here - the fingerprint is the only thing that can

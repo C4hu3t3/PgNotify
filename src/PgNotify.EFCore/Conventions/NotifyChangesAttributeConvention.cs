@@ -1,5 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using PgNotify.Diagnostics;
 using PgNotify.Internal;
 using PgNotify.Metadata;
 using PgNotify.Naming;
@@ -17,7 +20,8 @@ namespace PgNotify.Conventions;
 /// <c>HasDatabaseNotifications()</c> call for the same entity always takes precedence — EF Core's
 /// convention system resolves conflicting annotation sources in favor of explicit configuration.
 /// </remarks>
-public sealed class NotifyChangesAttributeConvention : IEntityTypeAddedConvention
+public sealed class NotifyChangesAttributeConvention(IDiagnosticsLogger<DbLoggerCategory.Model.Validation> logger)
+    : IEntityTypeAddedConvention
 {
     /// <inheritdoc />
     public void ProcessEntityTypeAdded(
@@ -36,13 +40,26 @@ public sealed class NotifyChangesAttributeConvention : IEntityTypeAddedConventio
             return;
         }
 
+        var watchedUpdateProperties = attribute.WatchedProperties ?? [];
+        if (!attribute.CompareColumnsOnUpdate && watchedUpdateProperties.Length > 0)
+        {
+            // Unlike the channel-strategy/payload-builder conflicts below, there's a safe default
+            // to fall back to instead of rejecting the model outright: CompareColumnsOnUpdate =
+            // false already means "watch no columns" on its own, so WatchedProperties here can only
+            // be redundant with it or contradict it - either way, honoring the false and ignoring
+            // WatchedProperties is a defensible reading, so this is a warning to clean up, not a
+            // fatal error.
+            logger.ConflictingCompareColumnsAndWatchedPropertiesWarning(clrType.Name);
+            watchedUpdateProperties = [];
+        }
+
         var (channelStrategyKind, channelStrategyArgument) = ResolveChannelStrategy(attribute, clrType);
         var (payloadBuilderKind, payloadBuilderTypeName) = ResolvePayloadBuilder(attribute, clrType);
 
         NotificationConfigurationWriter.Apply(
             (name, value) => entityTypeBuilder.HasAnnotation(name, value, fromDataAnnotation: true),
             attribute.Operations,
-            watchedUpdateProperties: attribute.WatchedProperties ?? [],
+            watchedUpdateProperties: watchedUpdateProperties,
             channelStrategyKind,
             channelStrategyArgument,
             channelNameOverride: attribute.ChannelName,
@@ -50,7 +67,8 @@ public sealed class NotifyChangesAttributeConvention : IEntityTypeAddedConventio
             payloadBuilderTypeName,
             namePrefix: attribute.NamePrefix,
             payloadOverflow: attribute.PayloadOverflow,
-            payloadProperties: attribute.PayloadProperties ?? []);
+            payloadProperties: attribute.PayloadProperties ?? [],
+            unconditionalUpdate: !attribute.CompareColumnsOnUpdate);
     }
 
     private static (string Kind, string? Argument) ResolveChannelStrategy(NotifyChangesAttribute attribute, Type clrType)

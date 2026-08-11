@@ -118,6 +118,28 @@ public class AttributeConflictingStrategyEntity
     public int Id { get; set; }
 }
 
+[NotifyChanges(NotificationOperations.Update, CompareColumnsOnUpdate = false)]
+public class AttributeUnconditionalUpdateEntity
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+}
+
+/// <summary>The fluent twin of <see cref="AttributeUnconditionalUpdateEntity"/>.</summary>
+public class FluentUnconditionalUpdateEntity
+{
+    public int Id { get; set; }
+
+    public string Name { get; set; } = "";
+}
+
+[NotifyChanges(CompareColumnsOnUpdate = false, WatchedProperties = [nameof(Id)])]
+public class AttributeConflictingCompareColumnsEntity
+{
+    public int Id { get; set; }
+}
+
 [NotifyChanges(PayloadBuilder = typeof(string))]
 public class AttributeWrongPayloadBuilderTypeEntity
 {
