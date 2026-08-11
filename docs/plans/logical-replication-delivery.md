@@ -131,7 +131,48 @@ below, worth surfacing in the orphan-slot warning's message text in Phase 2.
   - `RejectSharedTable`/`RejectUnmappedToTable` apply unchanged — `RelationMessage` still resolves
     at table granularity, same ambiguity as `table.EntityTypeMappings.First()` today.
 
-## Phase 2 — migrations DDL
+## Phase 2 — migrations DDL (implemented, deviates from the plan in three ways)
+
+Built as `NotificationReplicationSqlBuilder`/`NotificationReplicationFingerprint`
+(`src/PgNotify.Migrations/Internal/`), wired into `NpgsqlNotificationsAnnotationProvider`,
+`NpgsqlNotificationsMigrationsAnnotationProvider`, and `NpgsqlNotificationsMigrationsSqlGenerator`
+as an independent second fingerprint channel alongside the trigger one (both checked on every
+`Generate(...)` overload; a table's two fingerprints are mutually exclusive per the one-delivery
+-mode-per-entity rule, which is what makes a Notify↔LogicalReplication switch in one migration
+correct by construction — one channel's fingerprint disappears, the other's appears, no
+coordination code needed between them). Verified two ways: 87 unit tests asserting exact generated
+SQL text (`NotificationsReplicationSqlGenerationTests.cs`), and the generated DDL executed twice
+(idempotency) against a real `postgres:16-alpine` — including the shared-slot-across-two-tables
+case, and a removal that correctly left a still-referencing table's slot and the other table's
+publication membership untouched.
+
+Deviations from the original plan text below, kept for the reasoning:
+
+- **Idempotency mechanism.** The plan didn't commit to a specific SQL shape. Landed on `DO $$ ...
+  IF NOT EXISTS (catalog check) THEN EXECUTE '...' END IF; END $$` for `CREATE PUBLICATION` and
+  `ALTER PUBLICATION ... ADD/DROP TABLE` (PostgreSQL has no `IF NOT EXISTS` for either), plain
+  unconditional SQL for `ALTER TABLE ... REPLICA IDENTITY` (re-setting the same value is already a
+  no-op, no guard needed), and the `WHERE NOT EXISTS (SELECT ... pg_replication_slots)` guard the
+  Phase 0 spike already used for the slot. Publication-membership existence is checked via
+  `to_regclass('<delimited-and-escaped-identifier>')` against `pg_publication_rel`/`pg_publication`
+  rather than a `schemaname`/`tablename` text match against `pg_publication_tables`, so schema
+  resolution for an unqualified table name is delegated to PostgreSQL itself (the same resolution
+  `ALTER PUBLICATION ... ADD TABLE` on that same identifier would use) instead of the generator
+  guessing "public".
+- **No database-first support in v1.** `EnsureNotificationTriggersAsync`/
+  `GenerateNotificationTriggersScript` have no logical-replication counterpart — out of scope here,
+  not attempted.
+- **Orphan detection is read-only in v1, and is a naming-pattern match, not a hash-verified mark.**
+  `OrphanedNotificationReplicationSlotReader` + `DatabaseFacade.FindOrphanedNotificationReplicationSlots()`/
+  `...Async()` (mirroring the trigger case's `Find...`, deliberately with no `Remove...` counterpart)
+  scan `pg_replication_slots` for `plugin = 'pgoutput'` and a `pgnotify_`-containing name, then diff
+  against the slot names the current model's `LogicalReplication` entities would produce. Unlike
+  `OrphanedNotificationTrigger`, there is no `COMMENT ON`-equivalent mechanism for a replication
+  slot to carry a verifiable fingerprint, so this is a heuristic and says so in its own doc comment.
+  `OrphanedNotificationReplicationSlot` surfaces `WalStatus` from the catalog specifically so a
+  caller can see how much WAL retention is actually at stake before deciding anything.
+
+## Phase 2 — original plan text (superseded by "implemented" above; kept for the reasoning trail)
 
 New provider path parallel to the existing trigger one (`NpgsqlNotificationsAnnotationProvider` /
 `NpgsqlNotificationsMigrationsSqlGenerator`), scoped to entities with `DeliveryMode ==

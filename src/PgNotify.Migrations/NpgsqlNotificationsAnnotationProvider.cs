@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata.Internal;
+using PgNotify;
 using PgNotify.Migrations.Internal;
 
 namespace PgNotify.Migrations;
@@ -22,6 +23,7 @@ public class NpgsqlNotificationsAnnotationProvider(
     // ISqlGenerationHelper the migrations SQL generator uses - EF Core's internal container
     // resolves it here without any extra registration.
     private readonly NotificationTriggerSqlBuilder _triggerSqlBuilder = new(sqlGenerationHelper);
+    private readonly NotificationReplicationSqlBuilder _replicationSqlBuilder = new(sqlGenerationHelper);
 
     /// <inheritdoc />
     public override IEnumerable<IAnnotation> For(ITable table, bool designTime)
@@ -40,6 +42,19 @@ public class NpgsqlNotificationsAnnotationProvider(
         var config = entityType.GetNotificationConfiguration();
         if (config is null)
         {
+            yield break;
+        }
+
+        // Delivery mode is one-or-the-other per entity, so exactly one of the two fingerprints
+        // below is ever attached to a given table - never both, never neither (while notifications
+        // are enabled at all).
+        if (config.DeliveryMode == NotificationDeliveryMode.LogicalReplication)
+        {
+            var replicationStatements = _replicationSqlBuilder.BuildUpsertStatements(config);
+            yield return new Annotation(
+                NotificationReplicationFingerprint.AnnotationName,
+                NotificationReplicationFingerprint.Compute(config, replicationStatements));
+            yield return new Annotation(NotificationReplicationFingerprint.NamePrefixAnnotationName, config.NamePrefix);
             yield break;
         }
 

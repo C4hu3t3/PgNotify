@@ -213,6 +213,63 @@ public static class DatabaseFacadeNotificationsExtensions
         return orphans;
     }
 
+    /// <summary>
+    /// Finds <c>pgoutput</c> replication slots deployed that match this library's naming
+    /// convention but that no entity in the current model's
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/> configuration asks for any more —
+    /// see <see cref="OrphanedNotificationReplicationSlot"/> for how they're recognized (a
+    /// naming-pattern match, unlike the hash-verified trigger case) and why nothing here drops
+    /// them. Requires <c>UseNpgsqlNotifications()</c> to have been chained onto <c>UseNpgsql(...)</c>.
+    /// </summary>
+    public static IReadOnlyList<OrphanedNotificationReplicationSlot> FindOrphanedNotificationReplicationSlots(this DatabaseFacade database)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var expected = BuildExpectedSlotNames(database);
+        var deployed = OrphanedNotificationReplicationSlotReader.Read(database.GetDbConnection());
+        return BuildOrphanSlots(expected, deployed);
+    }
+
+    /// <summary>
+    /// Finds <c>pgoutput</c> replication slots deployed that match this library's naming
+    /// convention but that no entity in the current model's
+    /// <see cref="NotificationDeliveryMode.LogicalReplication"/> configuration asks for any more —
+    /// see <see cref="OrphanedNotificationReplicationSlot"/> for how they're recognized (a
+    /// naming-pattern match, unlike the hash-verified trigger case) and why nothing here drops
+    /// them. Requires <c>UseNpgsqlNotifications()</c> to have been chained onto <c>UseNpgsql(...)</c>.
+    /// </summary>
+    public static async Task<IReadOnlyList<OrphanedNotificationReplicationSlot>> FindOrphanedNotificationReplicationSlotsAsync(
+        this DatabaseFacade database, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(database);
+
+        var expected = BuildExpectedSlotNames(database);
+        var deployed = await OrphanedNotificationReplicationSlotReader.ReadAsync(database.GetDbConnection(), cancellationToken)
+            .ConfigureAwait(false);
+        return BuildOrphanSlots(expected, deployed);
+    }
+
+    private static HashSet<string> BuildExpectedSlotNames(DatabaseFacade database)
+    {
+        var context = database.GetService<ICurrentDbContext>().Context;
+
+        return
+        [
+            .. context.Model.GetEntityTypes()
+                .Select(entityType => entityType.GetNotificationConfiguration())
+                .Where(config => config is { Operations: not NotificationOperations.None, DeliveryMode: NotificationDeliveryMode.LogicalReplication })
+                .Select(config => NotificationReplicationSqlBuilder.GetSlotName(config!.NamePrefix, config.ReplicationConsumerGroup)),
+        ];
+    }
+
+    private static IReadOnlyList<OrphanedNotificationReplicationSlot> BuildOrphanSlots(
+        HashSet<string> expected, IReadOnlyList<DeployedNotificationReplicationSlot> deployed) =>
+        [
+            .. deployed
+                .Where(d => !expected.Contains(d.SlotName))
+                .Select(d => new OrphanedNotificationReplicationSlot(d.SlotName, d.Active, d.WalStatus)),
+        ];
+
     private static ILogger? GetLogger(DatabaseFacade database) =>
         database.GetService<ILoggerFactory>().CreateLogger("PgNotify.Migrations");
 

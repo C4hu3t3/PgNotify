@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
+using PgNotify;
 using PgNotify.Migrations.Internal;
 
 namespace PgNotify.Migrations;
@@ -28,6 +29,7 @@ public class NpgsqlNotificationsMigrationsAnnotationProvider(
     : MigrationsAnnotationProvider(dependencies)
 {
     private readonly NotificationTriggerSqlBuilder _triggerSqlBuilder = new(sqlGenerationHelper);
+    private readonly NotificationReplicationSqlBuilder _replicationSqlBuilder = new(sqlGenerationHelper);
 
     /// <inheritdoc />
     public override IEnumerable<IAnnotation> ForRemove(ITable table)
@@ -41,6 +43,16 @@ public class NpgsqlNotificationsMigrationsAnnotationProvider(
         var config = entityType.GetNotificationConfiguration();
         if (config is null)
         {
+            yield break;
+        }
+
+        if (config.DeliveryMode == NotificationDeliveryMode.LogicalReplication)
+        {
+            var replicationStatements = _replicationSqlBuilder.BuildUpsertStatements(config);
+            yield return new Annotation(
+                NotificationReplicationFingerprint.AnnotationName,
+                NotificationReplicationFingerprint.Compute(config, replicationStatements));
+            yield return new Annotation(NotificationReplicationFingerprint.NamePrefixAnnotationName, config.NamePrefix);
             yield break;
         }
 

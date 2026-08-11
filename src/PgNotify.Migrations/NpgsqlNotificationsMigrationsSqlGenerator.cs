@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Migrations;
+using PgNotify;
 using PgNotify.Migrations.Internal;
 using PgNotify.Model;
 
@@ -21,11 +22,23 @@ public class NpgsqlNotificationsMigrationsSqlGenerator(
     : NpgsqlMigrationsSqlGenerator(dependencies, npgsqlSingletonOptions)
 {
     private readonly NotificationTriggerSqlBuilder _triggerSqlBuilder = new(dependencies.SqlGenerationHelper);
+    private readonly NotificationReplicationSqlBuilder _replicationSqlBuilder = new(dependencies.SqlGenerationHelper);
 
     /// <inheritdoc />
     protected override void Generate(CreateTableOperation operation, IModel? model, MigrationCommandListBuilder builder, bool terminate = true)
     {
         base.Generate(operation, model, builder, terminate: true);
+
+        if (operation.FindAnnotation(NotificationReplicationFingerprint.AnnotationName) is not null)
+        {
+            var replicationConfig = ResolveConfiguration(model, operation.Schema, operation.Name);
+            if (replicationConfig is not null)
+            {
+                EmitStatements(builder, _replicationSqlBuilder.BuildUpsertStatements(replicationConfig));
+            }
+
+            return;
+        }
 
         if (operation.FindAnnotation(NotificationFingerprint.AnnotationName) is null)
         {
@@ -45,6 +58,17 @@ public class NpgsqlNotificationsMigrationsSqlGenerator(
     {
         base.Generate(operation, model, builder);
 
+        // The two fingerprints are mutually exclusive per table (one delivery mode each), but both
+        // channels are always checked independently: that is what makes a mode switch (Notify <->
+        // LogicalReplication in one migration) correct by construction rather than a special case —
+        // one channel sees its fingerprint disappear (removal), the other sees its fingerprint
+        // appear (upsert), with no coordination between them needed.
+        GenerateTriggerAlterations(operation, model, builder);
+        GenerateReplicationAlterations(operation, model, builder);
+    }
+
+    private void GenerateTriggerAlterations(AlterTableOperation operation, IModel? model, MigrationCommandListBuilder builder)
+    {
         var newFingerprint = (string?)operation.FindAnnotation(NotificationFingerprint.AnnotationName)?.Value;
         var oldFingerprint = (string?)operation.OldTable.FindAnnotation(NotificationFingerprint.AnnotationName)?.Value;
 
@@ -83,6 +107,40 @@ public class NpgsqlNotificationsMigrationsSqlGenerator(
         }
     }
 
+    private void GenerateReplicationAlterations(AlterTableOperation operation, IModel? model, MigrationCommandListBuilder builder)
+    {
+        var newFingerprint = (string?)operation.FindAnnotation(NotificationReplicationFingerprint.AnnotationName)?.Value;
+        var oldFingerprint = (string?)operation.OldTable.FindAnnotation(NotificationReplicationFingerprint.AnnotationName)?.Value;
+
+        if (newFingerprint == oldFingerprint)
+        {
+            return;
+        }
+
+        if (newFingerprint is null)
+        {
+            var namePrefix = (string?)operation.OldTable.FindAnnotation(NotificationReplicationFingerprint.NamePrefixAnnotationName)?.Value ?? "";
+            EmitStatements(builder, _replicationSqlBuilder.BuildRemovalStatements(operation.Schema, operation.Name, namePrefix));
+            return;
+        }
+
+        var config = ResolveConfiguration(model, operation.Schema, operation.Name);
+        if (config is not null)
+        {
+            // Same reasoning as the trigger side's NamePrefix handling: the publication name
+            // ({prefix}pgnotify_pub) embeds the prefix, so a changed prefix alone would otherwise
+            // leave this table a member of the old-prefixed publication forever, replicating it
+            // through both.
+            var oldPrefix = (string?)operation.OldTable.FindAnnotation(NotificationReplicationFingerprint.NamePrefixAnnotationName)?.Value ?? "";
+            if (oldPrefix != config.NamePrefix)
+            {
+                EmitStatements(builder, _replicationSqlBuilder.BuildRemovalStatements(operation.Schema, operation.Name, oldPrefix));
+            }
+
+            EmitStatements(builder, _replicationSqlBuilder.BuildUpsertStatements(config));
+        }
+    }
+
     /// <inheritdoc />
     protected override void Generate(RenameTableOperation operation, IModel? model, MigrationCommandListBuilder builder)
     {
@@ -99,8 +157,13 @@ public class NpgsqlNotificationsMigrationsSqlGenerator(
         //
         // Scoped to a rename with no simultaneous notification-configuration change - a rename that
         // also changes NamePrefix (or turns notifications off) in the same migration is not covered.
+        //
+        // LogicalReplication needs none of this: neither the publication name nor the slot name
+        // embed the table name (NotificationReplicationSqlBuilder.GetPublicationName/GetSlotName are
+        // prefix/consumer-group scoped only), and PostgreSQL tracks publication membership by the
+        // table's OID, which a plain rename does not change - membership survives automatically.
         var config = ResolveConfiguration(model, operation.NewSchema ?? operation.Schema, operation.NewName ?? operation.Name);
-        if (config is not null)
+        if (config is { DeliveryMode: NotificationDeliveryMode.Notify })
         {
             EmitStatements(builder, _triggerSqlBuilder.BuildRemovalStatements(operation.Schema, operation.Name, config.NamePrefix));
         }
@@ -111,7 +174,15 @@ public class NpgsqlNotificationsMigrationsSqlGenerator(
     /// <inheritdoc />
     protected override void Generate(DropTableOperation operation, IModel? model, MigrationCommandListBuilder builder, bool terminate = true)
     {
-        if (operation.FindAnnotation(NotificationFingerprint.AnnotationName) is not null)
+        if (operation.FindAnnotation(NotificationReplicationFingerprint.AnnotationName) is not null)
+        {
+            var namePrefix = (string?)operation.FindAnnotation(NotificationReplicationFingerprint.NamePrefixAnnotationName)?.Value ?? "";
+
+            // ALTER PUBLICATION ... DROP TABLE needs the table to still exist (it resolves the
+            // relation via to_regclass), so this must run before the base DROP TABLE.
+            EmitStatements(builder, _replicationSqlBuilder.BuildRemovalStatements(operation.Schema, operation.Name, namePrefix));
+        }
+        else if (operation.FindAnnotation(NotificationFingerprint.AnnotationName) is not null)
         {
             var namePrefix = (string?)operation.FindAnnotation(NotificationFingerprint.NamePrefixAnnotationName)?.Value ?? "";
 
