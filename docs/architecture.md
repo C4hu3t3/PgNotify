@@ -244,11 +244,53 @@ time via `NotificationValidationConvention`).
   and full `keys`) can exceed this for wide tables or large composite keys; prefer the minimal
   payload or a custom, smaller `INotificationPayloadBuilder` for such entities.
 - **`LISTEN`/`NOTIFY` is fire-and-forget and not durable.** If no process is listening when a
-  notification fires, it is lost — there is no replay, no queue, no at-least-once guarantee. If
-  you need durability, pair this with (or replace it with) an outbox pattern or logical
-  replication; this library does not attempt to paper over that gap.
+  notification fires, it is lost — there is no replay, no queue, no at-least-once guarantee. This
+  is a deliberate default, not an oversight (see the non-goals above) — `NotificationDeliveryMode.LogicalReplication`
+  (below) is the library's own opt-in answer for entities that need durability instead of pairing
+  this with an external outbox pattern.
 - **Every listener on a channel receives every notification on it.** There's no per-consumer
   filtering at the database level beyond channel choice — that's what the three channel
   strategies are for (see `docs/migrations.md`).
 - **Triggers add write-path overhead.** `AFTER` triggers with an `IS DISTINCT FROM` guard are
   cheap, but they are not free; see `docs/performance.md`.
+
+## `NotificationDeliveryMode.LogicalReplication`: the opt-in durability escape hatch
+
+An entity can opt out of the trigger/`NOTIFY` path above entirely and instead have its changes read
+from PostgreSQL's write-ahead log through a logical replication slot
+(`WithDelivery(NotificationDeliveryMode.LogicalReplication)` or
+`[NotifyChanges(Delivery = NotificationDeliveryMode.LogicalReplication)]`) — see
+`docs/plans/logical-replication-delivery.md` for the full design and how it was verified. A slot
+retains WAL until the listener confirms a position, so a disconnected listener loses nothing and
+resumes exactly where it left off: at-least-once delivery, at the cost of a real, non-default set
+of operational prerequisites `Notify` does not have:
+
+- **`wal_level = logical` on the server.** A server-level setting migrations cannot set for you —
+  provision it yourself (and expect a restart to be required on an existing cluster).
+- **A role with the `REPLICATION` attribute** for the connection
+  `PgNotify.Runtime.Replication` streams over — a distinct permission from the normal DML
+  connection.
+- **No trigger, but no free lunch either**: `WithReplicaIdentityFull()` (needed for a filtered
+  `OnUpdate(...)` to be enforceable at all — there is no old row to compare against otherwise)
+  makes every write to the table log its full old row to WAL, not only writes this library reads;
+  see `docs/performance.md` for measured overhead.
+- **An orphaned replication slot pins WAL on the server indefinitely** until something confirms
+  past it — worse than an orphaned trigger, which is merely dead code. Nothing in this library
+  drops a slot automatically, on purpose (see `docs/plans/logical-replication-delivery.md`'s
+  "Accepted costs"); `DatabaseFacade.FindOrphanedNotificationReplicationSlots()` gives visibility,
+  not remediation.
+- **No `TRUNCATE` equivalent.** A `TRUNCATE` on a `LogicalReplication`-configured table is logged
+  and skipped, not translated into a notification — there is no `OnTruncate` on either delivery
+  mode today.
+- **The extended payload's `changed` field needs `REPLICA IDENTITY FULL` to mean anything.**
+  Without it, an update's old values are unavailable to the replication stream, so `changed` comes
+  back empty rather than guessed — a real, documented behavioral difference from the same
+  configuration under `Notify`, where the trigger's own `IS DISTINCT FROM` guard needs no such
+  setting.
+
+Despite the different transport, a `LogicalReplication`-delivered notification reaches handlers and
+`Events<TEntity>()` streams identically to a `Notify`-delivered one — same dispatch pipeline, same
+envelope shape for the same payload configuration (`NotificationPayloadJsonMaterializer` produces
+the exact JSON the trigger would have, then hands it to the same `INotificationPayloadDeserializer`)
+— so switching an entity's delivery mode changes none of the consuming code, only what it costs to
+run and what it guarantees when nobody was listening.

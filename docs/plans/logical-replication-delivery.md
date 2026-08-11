@@ -1,6 +1,10 @@
 # Plan: logical replication as an opt-in delivery mode
 
-Status: not started. No code written yet; this is the design to implement against.
+Status: **shipped.** All four phases implemented, tested (unit + real `postgres:16-alpine` for
+every phase, including two bugs only an end-to-end run against a real server caught), and
+documented (`docs/architecture.md`, `docs/performance.md`, `docs/troubleshooting.md`, `README.md`).
+Kept as the design/reasoning record; see each phase section below for what was actually built and
+where it deviated from the original plan text.
 
 ## Background: what prompted this
 
@@ -303,28 +307,36 @@ listener never pulls in replication connection-mode complexity, same layering re
   Decide during implementation, not in this plan.
 - `TruncateMessage` → log at warning level and skip; explicitly not silently ignored.
 
-## Phase 4 — tests and docs
+## Phase 4 — tests and docs (implemented, deviates from the plan in one way)
 
-- `PgNotify.Migrations.Tests`: exact-SQL-text assertions for publication/replica-identity/slot DDL,
-  same style as `MigrationTestHelper`-driven trigger tests; fingerprint round-trip test mirroring
-  the existing one.
-- `PgNotify.EFCore.Tests`: validation convention rejects filtered `OnUpdate` without
-  `ReplicaIdentityFull`; attribute/fluent convergence test for `Delivery`/`WithDelivery`, mirroring
-  the existing convergence tests for other options.
-- `PgNotify.IntegrationTests`: requires reconfiguring the shared Testcontainers Postgres fixture for
-  `wal_level=logical` and a `REPLICATION`-capable role (Phase 0 answers exactly what that needs to
-  look like) — insert/update/delete against a replication-configured entity and assert handler
-  invocation; kill the streaming connection mid-stream and assert a restart redelivers without loss
-  and without needing any client-persisted position.
-- `docs/performance.md`: measure `REPLICA IDENTITY FULL` WAL overhead the same way trigger overhead
-  is already measured there.
-- `docs/architecture.md`: add a subsection under Limits describing this mode as the explicit,
-  deliberate escape hatch for the documented durability gap — same directness as the existing
-  bullets, listing `wal_level=logical`, the `REPLICATION` role requirement, orphaned-slot WAL
-  growth, `REPLICA IDENTITY FULL` cost, and the missing `TRUNCATE` handling.
-- `docs/troubleshooting.md`: slot not advancing, orphaned slot growing WAL, "logical decoding
-  requires wal_level >= logical" errors.
-- `README.md`: mention as an advanced, explicitly opt-in feature — not in the quickstart.
+- `PgNotify.Migrations.Tests` and `PgNotify.EFCore.Tests` coverage landed in Phases 1–2 as they
+  were built, not deferred to this phase — see those sections above.
+- `PgNotify.IntegrationTests`: **deviation** — rather than reconfiguring the shared
+  `NotificationHostFixture`, `ReplicationEndToEndTests` uses its own isolated `postgres:16-alpine`
+  container (`wal_level=logical`). Every other integration test's container has no reason to pay
+  for logical decoding support it never uses, and Postgres's default `postgres` superuser already
+  has `REPLICATION` implicitly, so no separate role setup was needed for the test (that path is
+  covered at the API level by the Phase 0 spike instead, which specifically used a non-superuser
+  role). Two tests: insert/update/delete dispatched through the same handler interfaces/`Events<TEntity>()`
+  streams the NOTIFY path uses, and — the guarantee this delivery mode exists for — stopping and
+  restarting just the replication listener loses nothing inserted while stopped and does not
+  redeliver a transaction already confirmed before the stop. This run found a second real bug
+  (`PgOutputReplicationOptions` needs `binary: true`, or column values round-trip as raw text and
+  an integer key fails to deserialize as a `NotificationEnvelope.Keys` JSON number) that neither
+  unit tests nor the Phase 3 scratch probe happened to catch.
+- `docs/performance.md`: measured, not estimated — `REPLICA IDENTITY FULL` WAL overhead via
+  `pg_current_wal_lsn()` deltas around a 10,000-row `UPDATE`, both a narrow table (+13–14%) and a
+  wide one (+40%), showing the overhead scales with row width relative to what changed, not row
+  count.
+- `docs/architecture.md`: new subsection under Limits,
+  `NotificationDeliveryMode.LogicalReplication`: the opt-in durability escape hatch, covering every
+  prerequisite/gotcha the plan called for, plus the `changed`-field-needs-`ReplicaIdentityFull`
+  behavioral difference found while building Phase 3's payload materializer.
+- `docs/troubleshooting.md`: four new sections — listener won't start (`wal_level`/permission
+  errors), slot exists but nothing delivers, orphaned slot growing WAL — mirroring the existing
+  NOTIFY-path troubleshooting entries' structure and tone.
+- `README.md`: mentioned in Features (explicitly opt-in, not in the quickstart) and Project
+  layout/Testing, per the plan.
 
 ## Accepted costs
 

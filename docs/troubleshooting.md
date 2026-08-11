@@ -107,3 +107,54 @@ No — `Events<TEntity>()` subscriptions are independent of the underlying conne
 `NotificationEventHub`, a singleton that outlives any individual `NpgsqlNotificationListener`
 connection cycle. A reconnect only means a gap in notifications (anything published while
 disconnected is lost — `LISTEN`/`NOTIFY` has no backlog/replay), not a broken subscription.
+
+## Logical replication listener won't start: `wal_level` / permission errors
+
+`AddPostgresLogicalReplication()` throwing (or the hosted service faulting) at startup with a
+Postgres error about logical decoding or replication almost always means one of the two
+server-level prerequisites `NotificationDeliveryMode.LogicalReplication` needs is missing — neither
+is something a migration can set for you:
+
+- **`ERROR: logical decoding requires wal_level >= logical`** — the server's `wal_level` is at its
+  default (`replica`). Set `wal_level = logical` in `postgresql.conf` (or your managed Postgres
+  provider's equivalent) and restart the server; this is a restart-requiring setting, a reload is
+  not enough.
+- **`ERROR: permission denied to start WAL sender` / `must have replication permission`** — the
+  connection `PostgresLogicalReplicationOptions.ConnectionString` (or the `DbContext` connection
+  `AddReplicationMappingFromDbContexts()` derived it from) authenticates as a role without the
+  `REPLICATION` attribute. Grant it: `ALTER ROLE the_role WITH REPLICATION;`.
+
+## A replication slot exists but nothing is being delivered
+
+Check `pg_replication_slots` directly:
+
+```sql
+SELECT slot_name, active, wal_status, confirmed_flush_lsn FROM pg_replication_slots;
+```
+
+- **No row for the expected slot name** (`{NamePrefix}pgnotify_{ConsumerGroup}`, see
+  `NotificationReplicationNames`) — the migration that creates it hasn't been applied, or the
+  entity isn't actually configured for `NotificationDeliveryMode.LogicalReplication` (check
+  `entityType.GetNotificationConfiguration()?.DeliveryMode`).
+- **`active = false` for more than a moment** — nothing is currently streaming from it. Either the
+  listener process isn't running, or it's stuck in `ExponentialBackoffReconnectPolicy`'s retry loop
+  (same causes as [Listener won't reconnect](#listener-wont-reconnect) above — check logs for the
+  same `Attempt`/reconnecting messages, just from `PgNotify.Internal.LogicalReplicationHostedService`
+  instead of `NpgsqlNotificationListener`).
+- **The table isn't actually in the publication.** `SELECT * FROM pg_publication_tables WHERE
+  pubname = '<prefix>pgnotify_pub';` — if the table is missing, the migration that should have run
+  `ALTER PUBLICATION ... ADD TABLE` either hasn't been applied, or the entity's `NamePrefix` changed
+  without the corresponding migration being generated and applied (see the `NamePrefix` handling in
+  `docs/plans/logical-replication-delivery.md`'s Phase 2 notes).
+
+## An orphaned replication slot is growing WAL on the server
+
+A slot nothing is consuming pins WAL indefinitely (`wal_status` moves from `reserved` toward
+`extended`/`lost` the longer it sits unconsumed) — this is the sharper version of an orphaned
+trigger, and this library never drops a slot automatically (see
+`docs/plans/logical-replication-delivery.md`'s "Accepted costs"). Call
+`database.FindOrphanedNotificationReplicationSlots()` (or the `Async` overload) to list slots
+matching the naming convention that no entity in the current model asks for any more, then decide
+by hand — via `SELECT pg_drop_replication_slot('slot_name')` — whether it's actually safe to drop
+one (identification here is a naming-pattern match, not a hash-verified mark the way orphaned
+trigger detection is, so double-check before dropping).

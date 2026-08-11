@@ -118,6 +118,15 @@ everything else.
   generation, with `LastModified` taken from the trigger's clock so ETags stay identical across
   instances (see [`docs/architecture.md#change-tracking-ichangetoken`](docs/architecture.md#change-tracking-ichangetoken)).
 - **Roslyn analyzers** — `PGN001`–`PGN004` catch common misconfiguration at compile time.
+- **Opt-in at-least-once delivery via logical replication** — `WithDelivery(NotificationDeliveryMode.LogicalReplication)`
+  reads an entity's changes from PostgreSQL's WAL through a replication slot instead of a
+  trigger/`NOTIFY`, so a disconnected listener resumes without losing anything, at the cost of the
+  operational prerequisites `Notify` doesn't have (`wal_level = logical`, a `REPLICATION` role) —
+  see [`docs/architecture.md#notificationdeliverymodelogicalreplication-the-opt-in-durability-escape-hatch`](docs/architecture.md#notificationdeliverymodelogicalreplication-the-opt-in-durability-escape-hatch).
+  Nothing is enrolled in this mode by default; every entity not explicitly opted in keeps behaving
+  exactly as before. Requires the separate `PgNotify.Runtime.Replication` (+
+  `PgNotify.Runtime.Replication.EFCore` for model-driven mapping) packages, so a `Notify`-only
+  consumer never pulls in the replication assembly.
 
 See [`docs/architecture.md`](docs/architecture.md) for how these fit together, including a
 sequence diagram of the full trigger-to-handler lifecycle.
@@ -157,6 +166,7 @@ each with a single package reference — see
 
 ```
 src/        PgNotify.Core / .EFCore / .Migrations / .Runtime / .Runtime.EFCore / .Analyzers
+            PgNotify.Runtime.Replication / .Runtime.Replication.EFCore - opt-in logical replication
             PgNotify.Writer / .Listener - empty meta-packages bundling the above by role
 tests/      One test project per src/ project, plus PgNotify.IntegrationTests (Testcontainers)
 samples/    CacheInvalidation.WebApi, HttpCaching.WebApi, TaskBoard.*, Orders.* (full) +
@@ -175,7 +185,10 @@ See [`docs/architecture.md`](docs/architecture.md#solution-layout) for why each 
 - `PgNotify.IntegrationTests` — real PostgreSQL via Testcontainers: applies a migration,
   inserts/updates/deletes through EF Core, and asserts the runtime listener receives and
   correctly deserializes the resulting notifications, including a reconnect scenario
-  (`pg_terminate_backend` mid-test) and watched-column filtering.
+  (`pg_terminate_backend` mid-test) and watched-column filtering. A separate fixture
+  (`wal_level=logical`) covers `NotificationDeliveryMode.LogicalReplication` the same way, plus
+  stopping/restarting the replication listener to prove nothing already confirmed is lost or
+  redelivered.
 - `PgNotify.Analyzers.Tests` — drives the analyzer directly against real `CSharpCompilation`s.
 - `PgNotify.Runtime.EFCore.Tests` — derives channel mappings from real EF Core models, against
   an unroutable host: reading a model needs no connection.

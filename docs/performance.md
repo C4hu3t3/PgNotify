@@ -22,6 +22,35 @@
   trigger — and therefore the function — is never invoked for an operation that wasn't configured
   at all.
 
+## Logical replication (`REPLICA IDENTITY FULL`)
+
+`NotificationDeliveryMode.LogicalReplication` entities pay no trigger cost at all (no trigger is
+generated for them), but `WithReplicaIdentityFull()` — needed for a filtered `OnUpdate(...)` to be
+enforceable, see `NotificationValidationConvention` — has its own cost, paid by *every* write to
+the table, not only ones this library reads: `REPLICA IDENTITY FULL` makes PostgreSQL log the
+entire old row to WAL on every `UPDATE`/`DELETE`, not just the primary key.
+
+Measured against `postgres:16-alpine` (`wal_level=logical`), via `pg_current_wal_lsn()` deltas
+around a 10,000-row `UPDATE` touching one column, `CHECKPOINT`ed immediately before each run to
+keep the measurement to that one statement:
+
+| Table shape | `REPLICA IDENTITY DEFAULT` | `REPLICA IDENTITY FULL` | Overhead |
+| --- | --- | --- | --- |
+| 4 columns (3 short `text`, 1 `numeric`) | ~3.5 MB | ~4.0 MB | **+13–14%** |
+| 9 columns (8 `text`, 1 ~270-byte `text`) | ~11.5 MB | ~16.1 MB | **+40%** |
+
+The overhead scales with **row width relative to what changed**, not with row count: `FULL`
+logs every unchanged column's bytes as well as the changed one, so a narrow table with few
+unchanged columns pays little, and a wide table where one column changes out of many pays close to
+double that column's own logging cost. This is the same shape of tradeoff `OnUpdate(x => new {
+...})` already trades off for trigger cost (see above) — narrowing which columns actually change
+per write reduces `FULL`'s cost the same way it reduces the `IS DISTINCT FROM` guard's, because
+both scale with how much of the row moves.
+
+Consequence for a wide entity: prefer splitting a rarely-updated wide table from a frequently
+-updated narrow one (already good schema hygiene) over paying `FULL`'s per-write cost on every
+column of a wide table for the sake of one frequently-filtered column.
+
 ## Runtime side (.NET)
 
 - **Routing is a dictionary lookup, and there is no reflection on the hot path at all.**
