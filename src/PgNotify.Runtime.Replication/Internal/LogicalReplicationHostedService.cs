@@ -192,7 +192,13 @@ internal sealed class LogicalReplicationHostedService(
         await connection.Open(cancellationToken).ConfigureAwait(false);
 
         var slot = new PgOutputReplicationSlot(slotName);
-        var replicationOptions = new PgOutputReplicationOptions(publicationName, PgOutputProtocolVersion.V1);
+        // binary: true -- without it, pgoutput sends column values as text and
+        // ReplicationValue.Get<object>() returns the raw string rather than the column's natural
+        // CLR type (an integer key decoded as the string "1" instead of 1), which then fails to
+        // deserialize back through NotificationEnvelope.Keys (a JsonElement expected to be a
+        // number). Found by the end-to-end test, not by a unit test: nothing about the API shape
+        // signals this either.
+        var replicationOptions = new PgOutputReplicationOptions(publicationName, PgOutputProtocolVersion.V1, binary: true);
         var pending = new List<PendingChange>();
 
         logger.LogInformation("PostgreSQL logical replication listener connected for slot {SlotName}", slotName);

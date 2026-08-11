@@ -26,6 +26,8 @@
     <ProjectReference Include="..\..\src\PgNotify.Migrations\PgNotify.Migrations.csproj" />
     <ProjectReference Include="..\..\src\PgNotify.Runtime\PgNotify.Runtime.csproj" />
     <ProjectReference Include="..\..\src\PgNotify.Runtime.EFCore\PgNotify.Runtime.EFCore.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime.Replication\PgNotify.Runtime.Replication.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Runtime.Replication.EFCore\PgNotify.Runtime.Replication.EFCore.csproj" />
   </ItemGroup>
 
 </Project>
