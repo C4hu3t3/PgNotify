@@ -12,12 +12,20 @@ namespace PgNotify.Analyzers;
 /// property), PGN003 (configured but the runtime listener is never registered).
 /// </summary>
 /// <remarks>
-/// Scoped down deliberately: PGN002's "is this a navigation" check is a type-shape heuristic
-/// (collection or non-primitive reference type), not real EF Core model knowledge, so it can
-/// have false positives for scalar reference types (e.g. a value-converted column). PGN003 checks
-/// whether <c>AddPostgresNotifications(...)</c> appears anywhere in the compilation, not whether
-/// it's actually reachable from an entry point — full reachability analysis is out of scope for a
-/// lightweight analyzer.
+/// Scoped down deliberately: PGN002's "is this a navigation" check is a type-shape heuristic, not
+/// real EF Core model knowledge, so it can still have false positives for scalar reference types
+/// (e.g. a value-converted column) that <see cref="IsKnownScalarType"/> doesn't happen to
+/// recognize. It does account for the one collection-shaped exception this heuristic can get right
+/// without the model: Npgsql maps <c>List&lt;T&gt;</c>/<c>T[]</c> of a scalar <c>T</c> to a native
+/// PostgreSQL array column, so <see cref="IsLikelyScalarType"/> unwraps one level of
+/// array/<c>IEnumerable&lt;T&gt;</c> and re-checks the element type before concluding "navigation".
+/// The authoritative check remains <c>NotificationValidationConvention</c>
+/// (<c>PgNotify.EFCore</c>), which runs against the real, fully-built EF Core model at
+/// <c>OnModelCreating</c> and can tell a navigation from a scalar property (array-mapped or not)
+/// with certainty — this analyzer only needs to catch the common case early, at edit time. PGN003
+/// checks whether <c>AddPostgresNotifications(...)</c> appears anywhere in the compilation, not
+/// whether it's actually reachable from an entry point — full reachability analysis is out of
+/// scope for a lightweight analyzer.
 /// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class NotificationConfigurationAnalyzer : DiagnosticAnalyzer
@@ -171,7 +179,21 @@ public sealed class NotificationConfigurationAnalyzer : DiagnosticAnalyzer
             type = nullable.TypeArguments[0];
         }
 
-        return type.TypeKind == TypeKind.Enum || type.SpecialType switch
+        if (IsKnownScalarType(type))
+        {
+            return true;
+        }
+
+        // Npgsql maps a CLR array/collection whose element type is itself scalar (List<string>,
+        // int[], ...) to a native PostgreSQL array column - a real, single scalar column, not a
+        // navigation - so it's the element type, not the collection shape, that decides. A
+        // collection of anything else (an entity type) is presumed to be a navigation, same as
+        // before.
+        return TryGetCollectionElementType(type, out var elementType) && IsKnownScalarType(elementType);
+    }
+
+    private static bool IsKnownScalarType(ITypeSymbol type) =>
+        type.TypeKind == TypeKind.Enum || type.SpecialType switch
         {
             SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or SpecialType.System_Int16 or SpecialType.System_UInt16
                 or SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single
@@ -179,6 +201,25 @@ public sealed class NotificationConfigurationAnalyzer : DiagnosticAnalyzer
                     => true,
             _ => type.ToDisplayString() is "System.Guid" or "System.DateTimeOffset" or "System.TimeSpan" or "System.DateOnly" or "System.TimeOnly",
         };
+
+    private static bool TryGetCollectionElementType(ITypeSymbol type, out ITypeSymbol elementType)
+    {
+        if (type is IArrayTypeSymbol arrayType)
+        {
+            elementType = arrayType.ElementType;
+            return true;
+        }
+
+        var candidates = type is INamedTypeSymbol named ? type.AllInterfaces.Insert(0, named) : type.AllInterfaces;
+        var enumerable = candidates.FirstOrDefault(i => i.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T);
+        if (enumerable is not null)
+        {
+            elementType = enumerable.TypeArguments[0];
+            return true;
+        }
+
+        elementType = null!;
+        return false;
     }
 
     private static void ReportCrossCuttingDiagnostics(CompilationAnalysisContext context, AnalysisState state)

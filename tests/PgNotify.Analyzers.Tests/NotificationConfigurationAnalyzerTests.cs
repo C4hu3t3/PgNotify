@@ -14,6 +14,7 @@ public class NotificationConfigurationAnalyzerTests
             public int Id { get; set; }
             public string Name { get; set; } = "";
             public System.Collections.Generic.List<Order> Orders { get; set; } = new();
+            public System.Collections.Generic.List<string> Tags { get; set; } = new();
         }
 
         public class Order
@@ -95,6 +96,25 @@ public class NotificationConfigurationAnalyzerTests
                 protected override void OnModelCreating(ModelBuilder modelBuilder)
                 {
                     modelBuilder.Entity<User>().HasDatabaseNotifications(o => o.OnUpdate(x => x.Name));
+                }
+            }
+            """;
+
+        var diagnostics = await CompilationTestHelper.GetDiagnosticsAsync(source);
+
+        diagnostics.Should().NotContain(d => d.Id == "PGN002");
+    }
+
+    [Fact]
+    public async Task PGN002_does_not_fire_for_a_scalar_array_property()
+    {
+        var source = Preamble + """
+
+            public class SampleContext : DbContext
+            {
+                protected override void OnModelCreating(ModelBuilder modelBuilder)
+                {
+                    modelBuilder.Entity<User>().HasDatabaseNotifications(o => o.OnUpdate(x => x.Tags));
                 }
             }
             """;
