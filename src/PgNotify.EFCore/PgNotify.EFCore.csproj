@@ -9,8 +9,18 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" />
   </ItemGroup>
 
+  <!-- PrivateAssets="none" on Analyzers (unlike the plain Core reference above) so `dotnet pack`
+       emits a nuspec <dependency id="PgNotify.Analyzers" include="All" /> instead of the default
+       exclude="Build,Analyzers": [NotifyChanges]/HasDatabaseNotifications() - the APIs PGN001-004
+       actually analyze - live in this project, so any consumer installing PgNotify.EFCore (with or
+       without PgNotify.Migrations/PgNotify.Writer on top) must get the analyzer, not just
+       consumers who happen to go through the PgNotify.Writer meta-package. Verified by packing and
+       installing this package alone (no Writer) in a throwaway consumer: without this, a
+       HasDatabaseNotifications(o => o.OnUpdate(x => x.SomeCollection)) mistake built clean, 0
+       errors - PGN002 never ran. -->
   <ItemGroup>
     <ProjectReference Include="..\PgNotify.Core\PgNotify.Core.csproj" />
+    <ProjectReference Include="..\PgNotify.Analyzers\PgNotify.Analyzers.csproj" PrivateAssets="none" />
   </ItemGroup>
 
 </Project>

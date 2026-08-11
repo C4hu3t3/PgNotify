@@ -8,16 +8,15 @@
   <!-- Plain ProjectReferences (no OutputItemType="Analyzer"/ReferenceOutputAssembly="false"):
        those flags tell the local build to skip using the referenced assembly, but `dotnet pack`
        reads them the same way and converts each into a nuspec <dependency>, which is what lets a
-       consumer installing only this package transitively pull in Analyzers' own packed layout
-       (analyzers/dotnet/cs, no lib/). `dotnet pack` defaults every such dependency to
-       exclude="Build,Analyzers" though - correct for EFCore/Migrations (consumers shouldn't
-       inherit their build props), wrong for Analyzers specifically, since "Analyzers" is the only
-       asset it has. Verified by packing and inspecting the .nuspec: without PrivateAssets="none"
-       here, installing this package silently never ran PGN001-PGN004 for the consumer. -->
+       consumer installing only this package transitively pull in each project's own packed
+       layout. No direct reference to PgNotify.Analyzers here: PgNotify.EFCore's own
+       PrivateAssets="none" reference to it (see PgNotify.EFCore.csproj) already makes Analyzers
+       flow transitively into anyone who depends on EFCore - which every consumer of this
+       meta-package does - so a second, redundant direct dependency here would just be another
+       place to keep in sync. -->
   <ItemGroup>
     <ProjectReference Include="..\PgNotify.EFCore\PgNotify.EFCore.csproj" />
     <ProjectReference Include="..\PgNotify.Migrations\PgNotify.Migrations.csproj" />
-    <ProjectReference Include="..\PgNotify.Analyzers\PgNotify.Analyzers.csproj" PrivateAssets="none" />
   </ItemGroup>
 
 </Project>
