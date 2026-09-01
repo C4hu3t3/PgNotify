@@ -1,12 +1,12 @@
 # Samples
 
-## [`CacheInvalidation.WebApi/`](CacheInvalidation.WebApi/) — fully implemented
+## [`CacheInvalidation.WebApi/`](CacheInvalidation.WebApi/)
 
 An ASP.NET Core minimal API demonstrating the complete path: `[NotifyChanges]` → a real
 `dotnet ef migrations add`-produced migration → the runtime listener →
 `IDatabaseNotificationHandler<Product>` → `IMemoryCache` eviction. See its own README for how to run it.
 
-## [`HttpCaching.WebApi/`](HttpCaching.WebApi/) — fully implemented
+## [`HttpCaching.WebApi/`](HttpCaching.WebApi/)
 
 The same cache-invalidation problem as above, solved without writing a single handler:
 `options.AddChangeTracking()` turns every notification into an `IChangeToken`, consumed as an
@@ -18,7 +18,7 @@ created at startup via `EnsureCreatedAsync()` + `EnsureNotificationTriggersAsync
 `docker-compose.yml` (PostgreSQL on **5433**, so it can run next to `CacheInvalidation.WebApi`), but
 runs just as well against any PostgreSQL you point `ConnectionStrings__SampleDatabase` at.
 
-## `TaskBoard.Model/` + `TaskBoard.WebApi/` + `TaskBoard.Watcher/` — fully implemented
+## `TaskBoard.Model/` + `TaskBoard.WebApi/` + `TaskBoard.Watcher/`
 
 Two independent processes sharing one database, implementing the "multiple applications sharing
 one database" pattern described below for real instead of just describing it:
@@ -38,7 +38,7 @@ This is the sample to look at for how little two processes actually need to shar
 participate in the same notification stream — see its READMEs for exactly what's shared (one small
 model project) and what isn't (EF Core, Npgsql, or any reference between the two apps themselves).
 
-## [`Orders.Model/`](Orders.Model/) + [`Orders.WebApi/`](Orders.WebApi/) + [`Orders.Projector/`](Orders.Projector/) — fully implemented
+## [`Orders.Model/`](Orders.Model/) + [`Orders.WebApi/`](Orders.WebApi/) + [`Orders.Projector/`](Orders.Projector/)
 
 A two-process CQRS-style setup exercising the `PgNotify.Writer` and `PgNotify.Listener`
 meta-packages end to end, each with a single package reference instead of the individual library
@@ -63,7 +63,7 @@ whole Npgsql EF Core provider into a process that only ever reads. `Orders.Proje
 transitively through `PgNotify.Listener`) that `UseNpgsqlNotifications()` itself now calls
 internally, so the two stay in sync by construction rather than by convention.
 
-## [`WelcomeEmail.Model/`](WelcomeEmail.Model/) + [`WelcomeEmail.WebApi/`](WelcomeEmail.WebApi/) + [`WelcomeEmail.Mailer/`](WelcomeEmail.Mailer/) — fully implemented
+## [`WelcomeEmail.Model/`](WelcomeEmail.Model/) + [`WelcomeEmail.WebApi/`](WelcomeEmail.WebApi/) + [`WelcomeEmail.Mailer/`](WelcomeEmail.Mailer/)
 
 Transactional email done off the request path: `POST /api/members` writes one row and returns —
 it never touches SMTP — and a separate `WelcomeEmail.Mailer` process turns the resulting `INSERT`
