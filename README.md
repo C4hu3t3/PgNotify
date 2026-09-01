@@ -152,6 +152,10 @@ For a setup built on the `PgNotify.Writer`/`PgNotify.Listener` meta-packages ins
 individual library projects — a write-side API and a separate CQRS-style read-model projector,
 each with a single package reference — see
 [`samples/Orders.WebApi` + `samples/Orders.Projector`](samples/README.md#orderswebapi--ordersprojector--fully-implemented).
+For transactional email kept off the request path — a sign-up API that only writes rows and a
+separate mailer process (no EF Core, no database access — the projected payload is the whole email
+input) that sends via a Mailpit container — see
+[`samples/WelcomeEmail.WebApi` + `samples/WelcomeEmail.Mailer`](samples/README.md#welcomeemailwebapi--welcomeemailmailer--fully-implemented).
 
 ## Project layout
 
@@ -159,8 +163,8 @@ each with a single package reference — see
 src/        PgNotify.Core / .EFCore / .Migrations / .Runtime / .Runtime.EFCore / .Analyzers
             PgNotify.Writer / .Listener - empty meta-packages bundling the above by role
 tests/      One test project per src/ project, plus PgNotify.IntegrationTests (Testcontainers)
-samples/    CacheInvalidation.WebApi, HttpCaching.WebApi, TaskBoard.*, Orders.* (full) +
-            design sketches for two other scenarios
+samples/    CacheInvalidation.WebApi, HttpCaching.WebApi, TaskBoard.*, Orders.*,
+            WelcomeEmail.* (full) + design sketches for two other scenarios
 docs/       architecture.md, migrations.md, troubleshooting.md, performance.md, versioning.md
 ```
 

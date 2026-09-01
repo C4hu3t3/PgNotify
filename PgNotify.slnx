@@ -11,6 +11,9 @@
     <Project Path="samples/TaskBoard.Model/TaskBoard.Model.csproj" />
     <Project Path="samples/TaskBoard.WebApi/TaskBoard.WebApi.csproj" />
     <Project Path="samples/TaskBoard.Watcher/TaskBoard.Watcher.csproj" />
+    <Project Path="samples/WelcomeEmail.Model/WelcomeEmail.Model.csproj" />
+    <Project Path="samples/WelcomeEmail.WebApi/WelcomeEmail.WebApi.csproj" />
+    <Project Path="samples/WelcomeEmail.Mailer/WelcomeEmail.Mailer.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/PgNotify.Analyzers/PgNotify.Analyzers.csproj" />

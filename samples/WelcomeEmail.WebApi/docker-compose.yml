@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: welcome_email_sample
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    # 5435, not 5432/5433/5434: lets this sample run alongside CacheInvalidation.WebApi (5432),
+    # HttpCaching.WebApi/TaskBoard.WebApi (5433) and Orders.WebApi (5434).
+    ports:
+      - "5435:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 5s
+      retries: 10
+
+  # A throwaway SMTP server that captures every message instead of delivering it, with a web UI to
+  # read what arrived. WelcomeEmail.Mailer sends here; open http://localhost:8025 to watch the
+  # welcome emails show up. Nothing here needs real credentials or TLS.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"   # web UI
+      - "1025:1025"   # SMTP
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: "true"
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"

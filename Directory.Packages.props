@@ -41,6 +41,8 @@
 
     <!-- Samples -->
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    <!-- WelcomeEmail.Mailer only: sends the actual SMTP message to the sample's Mailpit container. -->
+    <PackageVersion Include="MailKit" Version="4.17.0" />
 
     <!-- Benchmarks -->
     <PackageVersion Include="BenchmarkDotNet" Version="0.14.0" />

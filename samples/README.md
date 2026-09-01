@@ -63,6 +63,31 @@ whole Npgsql EF Core provider into a process that only ever reads. `Orders.Proje
 transitively through `PgNotify.Listener`) that `UseNpgsqlNotifications()` itself now calls
 internally, so the two stay in sync by construction rather than by convention.
 
+## [`WelcomeEmail.Model/`](WelcomeEmail.Model/) + [`WelcomeEmail.WebApi/`](WelcomeEmail.WebApi/) + [`WelcomeEmail.Mailer/`](WelcomeEmail.Mailer/) — fully implemented
+
+Transactional email done off the request path: `POST /api/members` writes one row and returns —
+it never touches SMTP — and a separate `WelcomeEmail.Mailer` process turns the resulting `INSERT`
+notification into one welcome email. The API stays free of SMTP latency and SMTP failures, and any
+number of API instances need no coordination on who sends the mail, because none of them do.
+
+- [`WelcomeEmail.Model/`](WelcomeEmail.Model/) is the shared `Member` entity — and, unlike every
+  other `*.Model` sample, it carries **no `[NotifyChanges]`**: this sample needs a *projected*
+  payload, which only the fluent API can declare, so the configuration lives on the write side.
+- [`WelcomeEmail.WebApi/`](WelcomeEmail.WebApi/) configures
+  `HasDatabaseNotifications(o => o.OnInsert().WithPayload(m => new { m.Email, m.DisplayName }))`,
+  owns the migration, and serves `/api/members`.
+- [`WelcomeEmail.Mailer/`](WelcomeEmail.Mailer/) references `PgNotify.Runtime` alone — like
+  `TaskBoard.Watcher`, **no EF Core and no `DbContext`**. The projected payload carries the address
+  and name, so `envelope.ToTyped<NewMember>()` in an `IDatabaseInsertedHandler<Member>` is the
+  whole input to the email; the process never opens the database. It sends via MailKit to a
+  **Mailpit** container (`docker-compose.yml` ships it, web UI on `:8025`) and adds
+  `options.UseRetry()`.
+
+This is also the sample that says the durability caveat out loud: a `NOTIFY` is not queued, so a
+mailer that is down when the row is written loses that email. `UseRetry()` handles a transient SMTP
+failure, not a missed notification — production would pair this with a startup sweep over
+un-mailed rows. See `WelcomeEmail.Mailer`'s README.
+
 ## The rest: design sketches
 
 Each of the following demonstrates a different consumption pattern the library is designed to

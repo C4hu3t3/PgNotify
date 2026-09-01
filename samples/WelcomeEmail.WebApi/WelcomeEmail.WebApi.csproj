@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace (meant for the library
+         projects) so `dotnet ef migrations add` derives a sensible Migrations/ namespace. -->
+    <RootNamespace>WelcomeEmail.WebApi</RootNamespace>
+    <UserSecretsId>d5b8e1a4-2c7f-4e9a-b3d6-8f1a0c4e7b92</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Same one reference as Orders.WebApi: PgNotify.Writer bundles EFCore + Migrations +
+         Analyzers, which is everything a project that owns the DbContext and configures
+         notifications needs and nothing a listener-only process would. This app never listens for
+         its own notifications - see ../WelcomeEmail.Mailer for the process that does. -->
+    <ProjectReference Include="..\WelcomeEmail.Model\WelcomeEmail.Model.csproj" />
+    <ProjectReference Include="..\..\src\PgNotify.Writer\PgNotify.Writer.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <!-- Overrides Directory.Build.props' solution-wide RootNamespace (meant for the library
+         projects), same as every other sample project. -->
+    <RootNamespace>WelcomeEmail.Model</RootNamespace>
+  </PropertyGroup>
+
+  <!-- No package references at all - not even PgNotify. Unlike TaskBoard.Model / Orders.Model,
+       this entity carries no [NotifyChanges] attribute: notifications are configured fluently in
+       WelcomeEmail.WebApi's DbContext (the only place that needs the projected payload), so the
+       shared surface here is a plain POCO plus a [Table] name and nothing else. [Table] is in
+       System.ComponentModel.DataAnnotations.Schema, part of the base class library. -->
+
+</Project>
