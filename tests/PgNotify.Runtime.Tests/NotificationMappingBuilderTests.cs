@@ -18,7 +18,7 @@ public class NotificationMappingBuilderTests
         builder.UseConnection(connection);
 
         builder.ProposedConnectionStrings.Should().ContainSingle()
-            .Which.Should().Be("Host=db;Database=app;Username=u;Password=p;Multiplexing=False;Pooling=False");
+            .Which.Should().Be("Host=db;Database=app;Username=u;Password=p" + ListeningConnectionString.Suffix);
     }
 
     [Fact]

@@ -2,6 +2,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
+#if NET11_0_OR_GREATER
+using Microsoft.EntityFrameworkCore.Query;
+#endif
 using Npgsql.EntityFrameworkCore.PostgreSQL.Infrastructure.Internal;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Migrations;
 using PgNotify.Migrations.Internal;
@@ -15,10 +18,23 @@ namespace PgNotify.Migrations;
 /// annotation that <see cref="NpgsqlNotificationsAnnotationProvider"/> and
 /// <see cref="NpgsqlNotificationsMigrationsAnnotationProvider"/> attach to table operations.
 /// </summary>
+/// <remarks>
+/// The constructor follows the base class's, which differs by provider major:
+/// Npgsql.EntityFrameworkCore.PostgreSQL 11 (net11.0) added an <see cref="IQuerySqlGeneratorFactory"/>
+/// parameter. EF Core's DI resolves whichever one is compiled in, so registration is unaffected.
+/// </remarks>
+#if NET11_0_OR_GREATER
+public class NpgsqlNotificationsMigrationsSqlGenerator(
+    MigrationsSqlGeneratorDependencies dependencies,
+    INpgsqlSingletonOptions npgsqlSingletonOptions,
+    IQuerySqlGeneratorFactory querySqlGeneratorFactory)
+    : NpgsqlMigrationsSqlGenerator(dependencies, npgsqlSingletonOptions, querySqlGeneratorFactory)
+#else
 public class NpgsqlNotificationsMigrationsSqlGenerator(
     MigrationsSqlGeneratorDependencies dependencies,
     INpgsqlSingletonOptions npgsqlSingletonOptions)
     : NpgsqlMigrationsSqlGenerator(dependencies, npgsqlSingletonOptions)
+#endif
 {
     private readonly NotificationTriggerSqlBuilder _triggerSqlBuilder = new(dependencies.SqlGenerationHelper);
 

@@ -5,13 +5,31 @@
     <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
-  <ItemGroup>
+  <!--
+    The runtime-aligned family is versioned per TargetFramework: each multi-targeted package must
+    depend on the EF Core / Npgsql major that matches the runtime it was compiled for.
+    PgNotify.Migrations plugs into EF Core's provider internals (IMigrationsSqlGenerator, annotation
+    providers), which change between majors, so a net11.0 build compiled against EF Core 10 and
+    resolved against EF Core 11 by the consumer is not a supported combination. EF Core 11 and
+    Npgsql.EntityFrameworkCore.PostgreSQL 11 ship net11.0 only, so the net10.0 build stays on 10.x.
+
+    Item (not property) conditions on purpose: items are evaluated after every property, so
+    $(TargetFramework) is already set even for a single-targeted project, whose TargetFramework is
+    declared in the .csproj body, after this file is imported.
+
+    Everything that isn't net11.0 (net10.0, and PgNotify.Analyzers' netstandard2.0) takes the 10.x
+    line. That keeps the analyzer on Roslyn 5.0.0 (see CLAUDE.md), while net11.0 needs 5.9.0 because
+    Microsoft.EntityFrameworkCore.Design 11 requires it (and Roslyn 5.9 in turn requires
+    Microsoft.CodeAnalysis.Analyzers 5.9); transitive pinning would otherwise fail restore with NU1109.
+  -->
+  <ItemGroup Condition="'$(TargetFramework)' != 'net11.0'">
     <!-- EF Core / Npgsql -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.15" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.15" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.4" />
     <PackageVersion Include="Npgsql" Version="10.0.4" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
 
     <!-- Hosting / DI / Options -->
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.15" />
@@ -21,12 +39,40 @@
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="10.0.15" />
     <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="10.0.15" />
 
-    <!-- Roslyn (generators / analyzers) -->
+    <!-- Roslyn -->
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0" />
-    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.0.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="5.0.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="3.11.0" />
+  </ItemGroup>
 
+  <ItemGroup Condition="'$(TargetFramework)' == 'net11.0'">
+    <!-- EF Core / Npgsql -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="11.0.0" />
+    <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="11.0.0" />
+    <PackageVersion Include="Npgsql" Version="11.0.0" />
+    <PackageVersion Include="EFCore.NamingConventions" Version="11.0.0" />
+
+    <!-- Hosting / DI / Options -->
+    <PackageVersion Include="Microsoft.Extensions.Hosting" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Logging" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks" Version="11.0.0" />
+    <PackageVersion Include="Microsoft.Extensions.Diagnostics.HealthChecks.Abstractions" Version="11.0.0" />
+
+    <!-- Roslyn -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="5.9.0" />
+    <PackageVersion Include="Microsoft.CodeAnalysis.Workspaces.Common" Version="5.9.0" />
+    <!-- Roslyn 5.9 depends on Microsoft.CodeAnalysis.Analyzers >= 5.9.0-1.x; transitive pinning
+         turns anything lower into NU1109. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Testing -->
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.2" />
     <PackageVersion Include="xunit" Version="2.9.3" />
@@ -34,8 +80,6 @@
     <PackageVersion Include="FluentAssertions" Version="7.2.2" />
     <PackageVersion Include="NSubstitute" Version="5.3.0" />
     <PackageVersion Include="Testcontainers.PostgreSql" Version="4.17.0" />
-    <!-- Integration tests only: proves the payload/channel naming holds under a third-party naming convention. -->
-    <PackageVersion Include="EFCore.NamingConventions" Version="10.0.1" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp.Analyzer.Testing.XUnit" Version="1.1.2" />
     <PackageVersion Include="coverlet.collector" Version="6.0.4" />
 

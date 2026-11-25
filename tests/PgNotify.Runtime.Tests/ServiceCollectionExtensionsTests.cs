@@ -57,7 +57,7 @@ public class ServiceCollectionExtensionsTests
         try
         {
             var state = provider.GetRequiredService<NotificationRuntimeState>();
-            state.ConnectionString.Should().Be("Host=localhost;Database=from_source;Multiplexing=False;Pooling=False");
+            state.ConnectionString.Should().Be("Host=localhost;Database=from_source" + ListeningConnectionString.Suffix);
             state.Channels.Should().BeEquivalentTo(["orders", "legacy_audit"]);
 
             provider.GetRequiredService<NotificationChannelMap>().Find(new NotificationEnvelope
@@ -91,7 +91,7 @@ public class ServiceCollectionExtensionsTests
         try
         {
             provider.GetRequiredService<NotificationRuntimeState>().ConnectionString
-                .Should().Be("Host=localhost;Database=explicit;Multiplexing=False;Pooling=False");
+                .Should().Be("Host=localhost;Database=explicit" + ListeningConnectionString.Suffix);
         }
         finally
         {

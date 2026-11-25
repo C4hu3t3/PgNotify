@@ -9,7 +9,7 @@ namespace PgNotify;
 public static class NotificationConnectionString
 {
     /// <summary>
-    /// Returns <paramref name="connectionString"/> with the two settings that are hostile to a
+    /// Returns <paramref name="connectionString"/> with the settings that are hostile to a
     /// <c>LISTEN</c> connection turned off.
     /// </summary>
     /// <remarks>
@@ -35,6 +35,12 @@ public static class NotificationConnectionString
     /// </item>
     /// </list>
     /// Everything else — host, credentials, TLS, timeouts, <c>ApplicationName</c> — is preserved.
+    /// <para>
+    /// On net11.0 (Npgsql 11) only <c>Pooling</c> is touched: Npgsql 11 removed multiplexing
+    /// altogether, and its connection-string parser rejects the <c>Multiplexing</c> keyword (even
+    /// <c>=false</c>) with an <see cref="ArgumentException"/> — the same exception the application's
+    /// own connection would hit with that string, so there is nothing left to sanitize.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentException"><paramref name="connectionString"/> is null or whitespace.</exception>
     /// <exception cref="System.ArgumentException"><paramref name="connectionString"/> is not a valid Npgsql connection string.</exception>
@@ -44,7 +50,9 @@ public static class NotificationConnectionString
 
         return new NpgsqlConnectionStringBuilder(connectionString)
         {
+#if !NET11_0_OR_GREATER
             Multiplexing = false,
+#endif
             Pooling = false,
         }.ToString();
     }

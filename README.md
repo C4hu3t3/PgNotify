@@ -106,7 +106,8 @@ everything else.
 - **Channels derived from the model** — `options.AddNotificationMappingFromDbContexts()` reads the channel
   names out of the same entity configuration that generates the triggers, so the two sides cannot
   drift; it also inherits the context's connection string, adjusted for a `LISTEN` connection
-  (`Multiplexing` and `Pooling` off — both measured to matter).
+  (`Pooling` off, and `Multiplexing` too on Npgsql 10 — both measured to matter; Npgsql 11
+  removed multiplexing).
 - **Entity-keyed handlers** — `IDatabaseInsertedHandler<T>`/`IDatabaseUpdatedHandler<T>`/
   `IDatabaseDeletedHandler<T>`/`IDatabaseNotificationHandler<T>`/`IDatabaseNotificationHandler`
   (multiple handlers, DI-scoped), or `await foreach (var e in notifications.Events<T>())` for

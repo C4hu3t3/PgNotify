@@ -260,7 +260,9 @@ so the listener's permanently-held connection takes a slot of the application's 
 (demonstrated with `MaxPoolSize=1`, where the application then cannot open a connection at all).
 That is the half `tests/PgNotify.IntegrationTests/ModelDrivenMappingTests.cs` proves by
 mutation; the multiplexing half is unit-tested only, because it cannot be caught by observing
-whether notifications arrive.
+whether notifications arrive. All of that is the net10.0 (Npgsql 10) build: Npgsql 11 removed
+multiplexing, so on net11.0 `ForListening` only turns `Pooling` off (`#if NET11_0_OR_GREATER`) —
+its parser rejects the `Multiplexing` keyword outright, so there is nothing left to sanitize.
 
 **Dispatch order is fixed in `NotificationDispatchPipeline`, not left to DI.** `Events<T>()`
 subscribers first (an async-stream consumer must not wait behind an unrelated handler's I/O), then
@@ -288,11 +290,25 @@ same file's `Invalidate()` also swallows-and-logs callback exceptions on purpose
 the dispatch pipeline (where throwing would trigger `RetryNotificationMiddleware`) and from a timer
 thread (where throwing would crash the process).
 
-**Central Package Management version pin note:** `Microsoft.CodeAnalysis.CSharp` is pinned to
-`5.0.0` (not the `4.x` line) specifically because `Microsoft.EntityFrameworkCore.Design` 10.x pulls
-`Microsoft.CodeAnalysis.CSharp >= 5.0.0` transitively; keep the whole `Microsoft.CodeAnalysis.*`
-family (used by `PgNotify.Analyzers`) on matching major
-versions or restore fails with `NU1109`/`NU1107`.
+**The runtime-aligned packages are versioned per `TargetFramework`.** `Directory.Packages.props`
+has two conditioned `ItemGroup`s: net11.0 gets EF Core / Npgsql / `Microsoft.Extensions.*` 11,
+everything else (net10.0, and the analyzer's netstandard2.0) gets the 10.x line. This is not
+cosmetic: `PgNotify.Migrations` subclasses provider internals (`NpgsqlMigrationsSqlGenerator`, whose
+constructor itself differs between the two majors — hence the `#if` there), so a net11.0 build
+compiled against EF Core 10 and resolved against EF Core 11 by the consumer would be untested, and
+EF Core 11 / the Npgsql EF provider 11 ship net11.0 only. The conditions are on *items*, not
+properties, because a single-targeted project sets `TargetFramework` in its body, after this file
+is imported; only item conditions see it. Source differences between the two majors use
+`#if NET11_0_OR_GREATER`, which lines up exactly with the package choice.
+
+**Central Package Management version pin note:** on the 10.x side, `Microsoft.CodeAnalysis.CSharp`
+is pinned to `5.0.0` because `Microsoft.EntityFrameworkCore.Design` 10.x pulls
+`Microsoft.CodeAnalysis.CSharp >= 5.0.0` transitively — and kept *there* rather than raised, because
+`PgNotify.Analyzers` compiles against it and an analyzer referencing a newer Roslyn than the
+consumer's compiler fails to load. On net11.0 the family is `5.9.0` (EF Core Design 11 requires it),
+and `Microsoft.CodeAnalysis.Analyzers` follows it to `5.9.0` because Roslyn 5.9 depends on a 5.9
+prerelease of it. Keep the whole `Microsoft.CodeAnalysis.*` family on matching versions within each
+group, or restore fails with `NU1109`/`NU1107` under transitive pinning.
 
 ## Testing conventions
 

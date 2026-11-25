@@ -214,7 +214,12 @@ public class DbContextNotificationMappingTests
         var provider = await StartAsync(services =>
         {
             services.AddDbContext<ProductContext>(o => o
+#if NET11_0_OR_GREATER
+                // Npgsql 11 removed multiplexing (the keyword no longer parses), leaving only pooling.
+                .UseNpgsql($"{ProductConnectionString};Pooling=true")
+#else
                 .UseNpgsql($"{ProductConnectionString};Multiplexing=true;Pooling=true")
+#endif
                 .UseNpgsqlNotifications());
             services.AddPostgresNotifications(options => options.AddNotificationMappingFromDbContexts());
         });
@@ -224,7 +229,9 @@ public class DbContextNotificationMappingTests
             var resolved = new NpgsqlConnectionStringBuilder(
                 provider.GetRequiredService<NotificationRuntimeState>().ConnectionString);
 
+#if !NET11_0_OR_GREATER
             resolved.Multiplexing.Should().BeFalse();
+#endif
             resolved.Pooling.Should().BeFalse();
             resolved.Database.Should().Be("products");
         }
