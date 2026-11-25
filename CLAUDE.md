@@ -65,9 +65,9 @@ sets nullable and `RootNamespace = PgNotify` for every project **except**
 namespace from the solution-wide default. Target framework is `net10.0` by default; every packable
 `src/` library (everything except `PgNotify.Analyzers`) and every `tests/` project instead
 multi-target `net10.0;net11.0`, so the published packages support both the current LTS runtime and
-the next preview one, and `dotnet test` actually runs the suite on both rather than only compiling
-against them. `.github/workflows/build.yml` installs both SDKs (`include-prerelease: true` for
-.NET 11) for exactly this reason — building with only the .NET 10 SDK fails with `NETSDK1045` on
+.NET 11, and `dotnet test` actually runs the suite on both rather than only compiling
+against them. `.github/workflows/build.yml` installs both SDKs for exactly this
+reason — building with only the .NET 10 SDK fails with `NETSDK1045` on
 every `net11.0` target.
 
 - `PgNotify.Core` — provider-agnostic vocabulary (channel-naming strategies, payload
